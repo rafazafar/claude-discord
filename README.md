@@ -45,8 +45,54 @@ Also per bundle: `allowedRoleIds`, `model`, `maxTurns`, `maxBudgetUsd`, `instruc
 
 1. Push this folder to a Git repo.
 2. Dokploy → **Create Service → Compose** → point it at the repo (compose file `docker-compose.yml`).
-3. **Environment**: paste your values from `.env.example`.
+3. **Environment** tab: add the variables below as `KEY=value` lines. Dokploy writes them to a `.env` file next to the compose file, which `docker-compose.yml` loads with `env_file`.
 4. Deploy. Logs should show `agent isolation {"runAs":"agent"}` and `connected to Discord`. Global slash commands can take a few minutes to appear; set `DEV_GUILD_ID` for instant registration while testing.
+
+### Environment variables
+
+**Required**
+
+| Variable | Value |
+|---|---|
+| `DISCORD_TOKEN` | Bot token from the Discord app's **Bot** tab. |
+| `DISCORD_APP_ID` | Application ID from the Discord app's **General Information** page. |
+| `ANTHROPIC_API_KEY` *and/or* `CLAUDE_CODE_OAUTH_TOKEN` | At least one Claude credential (see [step 2](#2-choose-a-claude-credential)). The bot refuses to start with neither. |
+
+**Needed depending on your bundles**
+
+| Variable | When |
+|---|---|
+| `GITHUB_TOKEN` | Any bundle with the `github` capability (or whatever name its `github.tokenEnv` gives). Fine-grained PAT on the listed repos: Contents read/write, Pull requests read/write, Metadata read. |
+| Any `${VAR}` in `bundles.json` | MCP server secrets, e.g. `LINEAR_API_KEY` for the example `ops-example-with-mcp` bundle. |
+
+**Optional**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AUTH_MODE` | `api_key` if `ANTHROPIC_API_KEY` is set, else `oauth_token` | Which credential to use when both are set. Admins can override live with `/claude auth`. |
+| `CLAUDE_MODEL` | `claude-opus-5-5` | Model for working sessions (a bundle's `model` overrides it). |
+| `AMBIENT_MODEL` | `claude-haiku-5-5` | Small model that decides whether to jump in during ambient mode. |
+| `ADMIN_ROLE_IDS` | – | Comma-separated role IDs allowed to run admin commands, besides anyone with Manage Server. |
+| `ADMIN_USER_IDS` | – | Comma-separated user IDs, same as above. |
+| `DEV_GUILD_ID` | – | Register slash commands to one server instantly instead of globally. |
+| `DEFAULT_TIMEZONE` | `UTC` | IANA timezone for schedules that don't name one, e.g. `Europe/London`. |
+| `MAX_CONCURRENT_RUNS` | `4` | Runs allowed at once across the whole bot. |
+| `CONTEXT_MESSAGES` | `25` | Recent channel messages (0–100) given as context when tagged. |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
+| `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `ANTHROPIC_BASE_URL` | – | Network settings passed through to the agent, only if your host needs them. |
+
+Don't set `DATA_DIR` or `BUNDLES_FILE` in Dokploy: `docker-compose.yml` already sets them to the volume and the bundled config.
+
+A minimal setup looks like this:
+
+```
+DISCORD_TOKEN=...
+DISCORD_APP_ID=...
+ANTHROPIC_API_KEY=sk-ant-...
+GITHUB_TOKEN=github_pat_...
+ADMIN_USER_IDS=123456789012345678
+DEFAULT_TIMEZONE=Europe/London
+```
 
 State (SQLite DB, session transcripts, workspaces) lives in the `claude-data` volume, so threads resume after redeploys.
 
