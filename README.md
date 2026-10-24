@@ -19,7 +19,8 @@ A Claude Tag–style teammate for Discord, built on the [Claude Agent SDK](https
 
 1. <https://discord.com/developers/applications> → **New Application**. Copy the **Application ID** → `DISCORD_APP_ID`.
 2. **Bot** tab → **Reset Token** → `DISCORD_TOKEN`. Turn on **Message Content Intent**.
-3. **OAuth2 → URL Generator**: scopes `bot` + `applications.commands`; permissions: View Channels, Send Messages, Send Messages in Threads, Create Public Threads, Read Message History, Attach Files, Add Reactions, Embed Links. Open the URL to invite the bot.
+3. **OAuth2 → URL Generator**: scopes `bot` + `applications.commands`; permissions: View Channels, Send Messages, Send Messages in Threads, Create Public Threads, Read Message History, Attach Files, Add Reactions, Embed Links.
+4. **Invite the bot**: open the generated URL in your browser, pick your server and click **Authorize**. You need Manage Server on that server. The bot now appears in the member list but stays **offline** until you deploy it in step 4.
 
 ## 2. Choose a Claude credential
 
@@ -107,6 +108,8 @@ State (SQLite DB, session transcripts, workspaces) lives in the `claude-data` vo
 To change bundles without rebuilding, uncomment the bind mount in `docker-compose.yml` (or use a Dokploy file mount at `/app/config/bundles.json`).
 
 ## 5. Use it
+
+Once the deploy is running, the bot you invited in step 1 shows as **online** in your server, and typing `/claude` lists its commands. If it's still offline, check the Dokploy logs. If it isn't in the member list at all, go back to step 1.4 and invite it.
 
 In a channel, an admin runs `/claude enable bundle:engineering`. Then anyone:
 
