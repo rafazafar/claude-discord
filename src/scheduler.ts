@@ -69,13 +69,13 @@ export class Scheduler {
     }
     this.store.markScheduleRun(id, Date.now());
     try {
-      await this.start(row, ch.bundle);
+      await this.start(row, ch.bundle, !!ch.threads);
     } catch (e) {
       log.error('scheduled run failed to start', { id, error: errMsg(e) });
     }
   }
 
-  private async start(row: ScheduleRow, bundleName: string) {
+  private async start(row: ScheduleRow, bundleName: string, threads: boolean) {
     const channel = await this.client.channels.fetch(row.channel_id);
     if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) {
       log.warn('schedule channel missing or unsupported', { id: row.id });
@@ -86,14 +86,17 @@ export class Scheduler {
       content: `🗓️ **Scheduled:** ${row.description || threadTitle(row.prompt)} · schedule #${row.id}`,
       allowedMentions: { parse: [] },
     });
-    const thread = await starter.startThread({ name: threadTitle(row.description || row.prompt), autoArchiveDuration: 1440 });
+    // Without threads the run replies to the starter, and replying to it continues the conversation.
+    const thread = threads ? await starter.startThread({ name: threadTitle(row.description || row.prompt), autoArchiveDuration: 1440 }) : null;
+    const key = thread?.id ?? starter.id;
     this.store.createThread({
-      thread_id: thread.id,
+      thread_id: key,
       parent_channel_id: row.channel_id,
       guild_id: row.guild_id,
-      cwd: workspaceFor(this.cfg, row.guild_id, row.channel_id, thread.id),
+      cwd: workspaceFor(this.cfg, row.guild_id, row.channel_id, key),
       bundle: bundleName,
     });
+    if (!thread) this.store.linkMessage(starter.id, key);
     let userName = 'scheduler';
     try {
       const u = await this.client.users.fetch(row.created_by);
@@ -102,7 +105,7 @@ export class Scheduler {
       /* keep default */
     }
     this.runs().enqueue({
-      key: thread.id,
+      key,
       trigger: 'schedule',
       guildId: row.guild_id,
       guildName: text.guild.name,
@@ -115,7 +118,9 @@ export class Scheduler {
       content: row.prompt,
       attachments: [],
       contextLines: [],
-      getChannel: async () => thread as SendableChannels,
+      getChannel: async () => (thread ?? text) as SendableChannels,
+      inline: !thread,
+      sourceMessage: starter,
       fetchHistory: (limit) => fetchLines(text, limit),
     });
   }

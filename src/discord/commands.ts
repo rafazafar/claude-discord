@@ -45,7 +45,19 @@ export const command = new SlashCommandBuilder()
           .addChoices({ name: 'Only when mentioned', value: 'mention' }, { name: 'Ambient (jump in when helpful)', value: 'ambient' }),
       ),
   )
-  .addSubcommand((s) => s.setName('stop').setDescription("Stop Claude's current work in this thread"))
+  .addSubcommand((s) =>
+    s
+      .setName('threads')
+      .setDescription('Admin: whether Claude opens a thread for each task in this channel')
+      .addStringOption((o) =>
+        o
+          .setName('mode')
+          .setDescription('off = reply in the channel (default); on = open a thread per task')
+          .setRequired(true)
+          .addChoices({ name: 'Off: reply in the channel', value: 'off' }, { name: 'On: open a thread per task', value: 'on' }),
+      ),
+  )
+  .addSubcommand((s) => s.setName('stop').setDescription("Stop Claude's current work in this thread or channel"))
   .addSubcommand((s) => s.setName('reset').setDescription('Start a fresh session in this thread or DM (forgets the conversation)'))
   .addSubcommandGroup((g) =>
     g
@@ -279,13 +291,28 @@ export class CommandHandler {
         );
         return;
       }
+      case 'threads': {
+        if (!(await needGuild()) || !(await needAdmin())) return;
+        const on = i.options.getString('mode', true) === 'on';
+        if (!store.setThreads(channelId, on, i.user.id)) {
+          await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
+          return;
+        }
+        await i.reply(
+          on
+            ? '🧵 Claude will open a thread for each task here.'
+            : '💬 Claude will reply in the channel. Reply to one of its messages to continue, or start a thread yourself and tag it there.',
+        );
+        return;
+      }
       case 'stop': {
         if (!this.canWorkHere(i, channelId)) {
           await i.reply({ content: "You don't have access to Claude's work in this channel.", ...EPHEMERAL });
           return;
         }
-        const ok = this.d.runs.stop(i.channelId);
-        await i.reply({ content: ok ? '⏹️ Stopping…' : 'Nothing is running in this thread.', ...EPHEMERAL });
+        // In a channel, inline conversations have no thread of their own: stop everything running here.
+        const ok = this.d.runs.stop(i.channelId) || (!i.channel?.isThread() && this.d.runs.stopChannel(i.channelId) > 0);
+        await i.reply({ content: ok ? '⏹️ Stopping…' : 'Nothing is running here.', ...EPHEMERAL });
         return;
       }
       case 'reset': {
@@ -356,7 +383,9 @@ export class CommandHandler {
         return;
       }
       bundleName = ch.bundle;
-      lines.push(`**Bundle:** ${ch.bundle} · **Replies:** ${ch.reply_mode === 'ambient' ? 'ambient' : 'only when mentioned'}`);
+      lines.push(
+        `**Bundle:** ${ch.bundle} · **Replies:** ${ch.reply_mode === 'ambient' ? 'ambient' : 'only when mentioned'} · **Threads:** ${ch.threads ? 'one per task' : 'off (replies in channel)'}`,
+      );
     } else {
       bundleName = bundles.dm.bundle;
       lines.push(`**DM bundle:** ${bundleName ?? 'DMs disabled'}`);

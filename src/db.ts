@@ -10,6 +10,8 @@ export interface ChannelRow {
   guild_id: string;
   bundle: string;
   reply_mode: ReplyMode;
+  /** 1: each tag opens a thread. 0: Claude replies inline and Discord replies continue the conversation. */
+  threads: number;
   updated_by: string | null;
   updated_at: number;
 }
@@ -70,6 +72,7 @@ CREATE TABLE IF NOT EXISTS channels (
   guild_id   TEXT NOT NULL,
   bundle     TEXT NOT NULL,
   reply_mode TEXT NOT NULL DEFAULT 'mention',
+  threads    INTEGER NOT NULL DEFAULT 0,
   updated_by TEXT,
   updated_at INTEGER NOT NULL
 );
@@ -136,6 +139,14 @@ CREATE TABLE IF NOT EXISTS ambient_log (
   at         INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ambient_log_channel ON ambient_log(channel_id, at);
+
+-- Claude's inline messages, so a Discord reply to one continues its conversation.
+CREATE TABLE IF NOT EXISTS reply_links (
+  message_id TEXT PRIMARY KEY,
+  conv_key   TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reply_links_time ON reply_links(created_at);
 `;
 
 export class Store {
@@ -147,6 +158,13 @@ export class Store {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  /** Columns added after the first release; CREATE TABLE IF NOT EXISTS won't add them to old databases. */
+  private migrate(): void {
+    const cols = (this.db.prepare('PRAGMA table_info(channels)').all() as Array<{ name: string }>).map((c) => c.name);
+    if (!cols.includes('threads')) this.db.exec('ALTER TABLE channels ADD COLUMN threads INTEGER NOT NULL DEFAULT 0');
   }
 
   // ---- channels -------------------------------------------------------------
@@ -174,6 +192,14 @@ export class Store {
       this.db
         .prepare('UPDATE channels SET reply_mode = ?, updated_by = ?, updated_at = ? WHERE channel_id = ?')
         .run(mode, by, Date.now(), channelId).changes > 0
+    );
+  }
+
+  setThreads(channelId: string, on: boolean, by: string): boolean {
+    return (
+      this.db
+        .prepare('UPDATE channels SET threads = ?, updated_by = ?, updated_at = ? WHERE channel_id = ?')
+        .run(on ? 1 : 0, by, Date.now(), channelId).changes > 0
     );
   }
 
@@ -222,6 +248,7 @@ export class Store {
 
   deleteThread(threadId: string): void {
     this.db.prepare('DELETE FROM threads WHERE thread_id = ?').run(threadId);
+    this.db.prepare('DELETE FROM reply_links WHERE conv_key = ?').run(threadId);
   }
 
   setThreadQuiet(threadId: string, quiet: boolean): void {
@@ -230,6 +257,24 @@ export class Store {
 
   touchThread(threadId: string): void {
     this.db.prepare('UPDATE threads SET last_active = ? WHERE thread_id = ?').run(Date.now(), threadId);
+  }
+
+  // ---- inline reply chains -----------------------------------------------------
+
+  linkMessage(messageId: string, convKey: string): void {
+    const now = Date.now();
+    this.db
+      .prepare('INSERT INTO reply_links (message_id, conv_key, created_at) VALUES (?, ?, ?) ON CONFLICT(message_id) DO NOTHING')
+      .run(messageId, convKey, now);
+    // keep the table small; replying to a month-old answer starts fresh
+    this.db.prepare('DELETE FROM reply_links WHERE created_at < ?').run(now - 30 * 24 * 3600 * 1000);
+  }
+
+  /** The conversation a message of Claude's belongs to, if it was posted inline. */
+  conversationFor(messageId: string): ThreadRow | undefined {
+    return this.db
+      .prepare('SELECT t.* FROM reply_links l JOIN threads t ON t.thread_id = l.conv_key WHERE l.message_id = ?')
+      .get(messageId) as ThreadRow | undefined;
   }
 
   // ---- memories -------------------------------------------------------------

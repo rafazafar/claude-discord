@@ -6,6 +6,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   type Message,
+  type MessageCreateOptions,
   type SendableChannels,
 } from 'discord.js';
 import type { Store } from '../db.js';
@@ -46,6 +47,11 @@ export interface WorkItem {
   contextLines: string[];
   /** Where replies go. For ambient work this creates the thread lazily, only if Claude replies. */
   getChannel: () => Promise<SendableChannels>;
+  /**
+   * No thread: Claude answers in the channel as a Discord reply to `sourceMessage`, and every
+   * message it posts is linked so replying to it continues this conversation.
+   */
+  inline?: boolean;
   sourceMessage?: Message;
   fetchHistory: (limit: number) => Promise<string[]>;
 }
@@ -62,7 +68,10 @@ const NO_REPLY = 'NO_REPLY';
 interface ActiveRun {
   abort: AbortController;
   startedBy: string;
+  channelId: string;
 }
+
+type Send = (payload: MessageCreateOptions) => Promise<Message>;
 
 export interface RunManagerDeps {
   store: Store;
@@ -84,7 +93,7 @@ class StatusReporter {
   private inflight: Promise<unknown> = Promise.resolve();
 
   constructor(
-    private readonly channel: SendableChannels,
+    private readonly send: Send,
     private readonly key: string,
   ) {}
 
@@ -103,7 +112,7 @@ class StatusReporter {
   async start(header?: string) {
     if (header) this.header = header;
     try {
-      this.msg = await this.channel.send({ content: this.render(), components: [this.stopRow()] });
+      this.msg = await this.send({ content: this.render(), components: [this.stopRow()] });
     } catch (e) {
       log.warn('status send failed', { error: errMsg(e) });
     }
@@ -192,6 +201,17 @@ export class RunManager {
     if (!run) return false;
     run.abort.abort();
     return true;
+  }
+
+  /** Stops every run in a channel (inline conversations have no thread of their own to stop from). */
+  stopChannel(channelId: string): number {
+    let n = 0;
+    for (const run of this.active.values()) {
+      if (run.channelId !== channelId) continue;
+      run.abort.abort();
+      n++;
+    }
+    return n;
   }
 
   stopAll(): void {
@@ -309,13 +329,20 @@ export class RunManager {
     let status: StatusReporter | null = null;
     let channel: SendableChannels | null = null;
     const getChannel = async () => (channel ??= await first.getChannel());
+    const replyTo = first.inline ? last.sourceMessage : undefined;
+    const send = async (payload: MessageCreateOptions, asReply = false): Promise<Message> => {
+      const ch = await getChannel();
+      const msg = await ch.send(asReply && replyTo ? { ...payload, reply: { messageReference: replyTo, failIfNotExists: false } } : payload);
+      if (first.inline) store.linkMessage(msg.id, first.key);
+      return msg;
+    };
 
     // Register before queueing for a slot so Stop works while queued.
     const abort = new AbortController();
-    this.active.set(first.key, { abort, startedBy: last.userId });
+    this.active.set(first.key, { abort, startedBy: last.userId, channelId: first.configChannelId });
 
     if (!lazy) {
-      status = new StatusReporter(await getChannel(), first.key);
+      status = new StatusReporter((p) => send(p, true), first.key);
       await status.start(this.sem.inUse >= cfg.MAX_CONCURRENT_RUNS ? '⏳ Queued behind other work…' : undefined);
     }
 
@@ -366,8 +393,7 @@ export class RunManager {
             workspace: thread.cwd,
             defaultTimezone: cfg.DEFAULT_TIMEZONE,
             sendFile: async (abs, caption) => {
-              const ch = await getChannel();
-              await ch.send({ content: caption ?? undefined, files: [new AttachmentBuilder(abs)] });
+              await send({ content: caption ?? undefined, files: [new AttachmentBuilder(abs)] });
             },
             fetchHistory: first.fetchHistory,
             onSchedulesChanged: this.deps.onSchedulesChanged,
@@ -405,7 +431,7 @@ export class RunManager {
         return;
       }
       store.logAmbient(first.configChannelId);
-      await this.postText(await getChannel(), body);
+      await this.postText(send, body);
       return;
     }
 
@@ -427,12 +453,15 @@ export class RunManager {
         await status?.finish(`⚠️ ${truncate(result.error ?? 'Something went wrong.', 1800)} ${footer}`);
     }
     // On errors the text is usually the raw error, already summarised in the status line.
-    if (result.status !== 'error' && result.text.trim()) await this.postText(await getChannel(), result.text);
+    if (result.status !== 'error' && result.text.trim()) await this.postText(send, result.text);
   }
 
-  private async postText(channel: SendableChannels, text: string) {
+  /** Posts the answer; inline, its first chunk is a reply so it's clear what it answers. */
+  private async postText(send: (payload: MessageCreateOptions, asReply?: boolean) => Promise<Message>, text: string) {
+    let first = true;
     for (const chunk of splitMessage(tablesToCodeBlocks(text))) {
-      await channel.send({ content: chunk, allowedMentions: { parse: ['users'] } });
+      await send({ content: chunk, allowedMentions: { parse: ['users'] } }, first);
+      first = false;
     }
   }
 }

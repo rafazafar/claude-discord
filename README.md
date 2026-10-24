@@ -1,17 +1,18 @@
 # Claude for Discord
 
-A Claude Tag–style teammate for Discord, built on the [Claude Agent SDK](https://docs.claude.com/en/docs/agent-sdk/overview). Tag `@Claude` in a channel, it opens a thread, works through the task with the tools its channel allows, and posts the result. Replies in the thread continue the same session without re-tagging.
+A Claude Tag–style teammate for Discord, built on the [Claude Agent SDK](https://docs.claude.com/en/docs/agent-sdk/overview). Tag `@Claude` in a channel and it works through the task with the tools its channel allows, then replies right there. Reply to its message to keep going, or start a thread yourself and tag it there. Channels can opt in to a thread per task instead.
 
 ## What it does
 
 | Claude Tag feature | Here |
 |---|---|
-| Tag `@Claude` to hand off work, reply in thread | Mention → thread → live progress with a **Stop** button → result. Follow-ups in the thread resume the session. Messages sent mid-run are batched into the next turn. |
+| Tag `@Claude` to hand off work | Mention → live progress with a **Stop** button → result, posted as a reply in the channel. Using Discord's **Reply** on any of Claude's messages continues that conversation; a new tag starts a fresh one (with recent channel messages as context). Messages sent mid-run are batched into the next turn. |
+| Threads | Start a thread yourself and tag Claude in it: it joins, and follow-ups there go to Claude without re-tagging. `/claude threads mode:on` makes Claude open a thread for every task in that channel instead. |
 | Access bundles per channel | `config/bundles.json` defines bundles (web, code, GitHub, MCP servers, role limits, step/budget caps). Admins attach one per channel with `/claude enable`. |
 | Channel memory | "From now on…" instructions are saved per channel or server and fed into every session. Manage with `/claude memory`. |
 | Ambient behaviour | `/claude reply mode:ambient` lets Claude jump in when a small model judges it can clearly help. Rate-limited per channel. |
-| Standing scheduled work | "Every weekday at 9am, summarise yesterday" → a cron schedule that posts a fresh thread each run (text and announcement channels; not forums). |
-| Quieting | "Stop replying here" → quiet thread; `/claude reply mode:mention` → mention-only. |
+| Standing scheduled work | "Every weekday at 9am, summarise yesterday" → a cron schedule that posts each run in the channel (or in a fresh thread when threads are on) (text and announcement channels; not forums). |
+| Quieting | "Stop replying here" → quiet thread or reply chain; `/claude reply mode:mention` → mention-only. |
 | DMs | Optional (off by default), on their own bundle. |
 | Switchable credential | API key or Claude plan sign-in; flip live with `/claude auth`. |
 
@@ -120,7 +121,7 @@ In a channel, an admin runs `/claude enable bundle:engineering`. Then anyone:
 @Claude from now on, answer in Japanese in this channel
 ```
 
-Commands: `/claude status · enable · disable · reply · stop · reset · memory … · schedule … · auth · usage · bundles`.
+Commands: `/claude status · enable · disable · reply · threads · stop · reset · memory … · schedule … · auth · usage · bundles`.
 
 ## Security notes
 

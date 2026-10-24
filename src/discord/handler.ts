@@ -1,5 +1,6 @@
 import {
   ChannelType,
+  MessageReferenceType,
   type Client,
   type Message,
   type SendableChannels,
@@ -7,7 +8,7 @@ import {
   type TextChannel,
   type ThreadChannel,
 } from 'discord.js';
-import type { Store, ChannelRow } from '../db.js';
+import type { Store, ChannelRow, ThreadRow } from '../db.js';
 import type { BundleRegistry } from '../bundles.js';
 import type { AuthManager } from '../auth.js';
 import type { Config } from '../config.js';
@@ -170,7 +171,8 @@ export class MessageHandler {
   private async onChannelMessage(m: Message) {
     const mentioned = this.isMentioned(m);
     const ch = this.d.store.getChannel(m.channel.id);
-    if (!mentioned) {
+    const chain = ch ? this.replyChain(m) : undefined;
+    if (!mentioned && !chain) {
       if (ch?.reply_mode === 'ambient') await this.considerAmbient(m, ch);
       return;
     }
@@ -178,6 +180,7 @@ export class MessageHandler {
       await this.deny(m, NOT_ENABLED);
       return;
     }
+    if (chain?.quiet && !mentioned) return;
     const bundle = this.d.bundles.get(ch.bundle);
     if (!bundle) {
       await this.deny(m, `My access bundle "${ch.bundle}" is missing. An admin can run \`/claude enable\` again.`);
@@ -188,9 +191,26 @@ export class MessageHandler {
       return;
     }
 
+    if (chain) {
+      // A Discord reply to one of Claude's inline messages: same session, already has the history.
+      if (chain.quiet) this.d.store.setThreadQuiet(chain.thread_id, false);
+      this.registerAndEnqueue(m, ch, mentioned ? 'mention' : 'thread', chain.thread_id, async () => m.channel as SendableChannels, [], true);
+      return;
+    }
     const contextLines = await fetchLines(m.channel as TextBasedChannel, this.d.cfg.CONTEXT_MESSAGES, m.id).catch(() => []);
+    if (!ch.threads) {
+      this.registerAndEnqueue(m, ch, 'mention', m.id, async () => m.channel as SendableChannels, contextLines, true);
+      return;
+    }
     const { key, getChannel } = await this.openThread(m, true);
     this.registerAndEnqueue(m, ch, 'mention', key, getChannel, contextLines);
+  }
+
+  /** The inline conversation this message continues, when it's a Discord reply to one of Claude's messages here. */
+  private replyChain(m: Message): ThreadRow | undefined {
+    const ref = m.reference;
+    if (!ref?.messageId || ref.type !== MessageReferenceType.Default || ref.channelId !== m.channelId) return undefined;
+    return this.d.store.conversationFor(ref.messageId);
   }
 
   /**
@@ -233,6 +253,7 @@ export class MessageHandler {
     key: string,
     getChannel: () => Promise<SendableChannels>,
     contextLines: string[],
+    inline = false,
   ) {
     this.d.store.createThread({
       thread_id: key,
@@ -247,6 +268,7 @@ export class MessageHandler {
       key,
       contextLines,
       getChannel,
+      inline,
       fetchHistory: (limit) => fetchLines(m.channel as TextBasedChannel, limit),
     });
   }
@@ -291,6 +313,10 @@ export class MessageHandler {
       });
       log.debug('ambient decision', { channel: ch.channel_id, ...decision });
       if (!decision.reply) return;
+      if (!ch.threads) {
+        this.registerAndEnqueue(m, ch, 'ambient', m.id, async () => m.channel as SendableChannels, history, true);
+        return;
+      }
       const { key, getChannel } = await this.openThread(m, false);
       this.registerAndEnqueue(m, ch, 'ambient', key, getChannel, history);
     } finally {

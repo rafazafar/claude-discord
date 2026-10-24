@@ -1,4 +1,8 @@
 import { test } from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Database from 'better-sqlite3';
 import assert from 'node:assert/strict';
 import { splitMessage, tablesToCodeBlocks, threadTitle, describeTool } from '../src/format.js';
 import { parseBundlesFile, substituteEnv } from '../src/bundles.js';
@@ -176,4 +180,35 @@ test('escapeTags neutralises prompt wrapper tags', async () => {
 
 test('MCP server names must be tool-safe', () => {
   assert.throws(() => parseBundlesFile({ bundles: { b: { mcpServers: { 'my.server': { type: 'http', url: 'https://x' } } } } }));
+});
+
+test('store: inline reply chains and per-channel threads setting', () => {
+  const s = new Store(':memory:');
+  s.enableChannel('c1', 'g1', 'general', 'u1');
+  assert.equal(s.getChannel('c1')!.threads, 0);
+  assert.ok(s.setThreads('c1', true, 'u1'));
+  assert.equal(s.getChannel('c1')!.threads, 1);
+  assert.equal(s.setThreads('nope', true, 'u1'), false);
+
+  s.createThread({ thread_id: 'm1', parent_channel_id: 'c1', guild_id: 'g1', cwd: '/w', bundle: 'general' });
+  s.linkMessage('bot1', 'm1');
+  s.linkMessage('bot2', 'm1');
+  assert.equal(s.conversationFor('bot2')?.thread_id, 'm1');
+  assert.equal(s.conversationFor('someone-else'), undefined);
+  s.deleteThread('m1');
+  assert.equal(s.conversationFor('bot1'), undefined);
+});
+
+test('store: adds the threads column to databases from before it existed', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-discord-'));
+  const file = path.join(dir, 'old.sqlite');
+  const old = new Database(file);
+  old.exec(`CREATE TABLE channels (channel_id TEXT PRIMARY KEY, guild_id TEXT NOT NULL, bundle TEXT NOT NULL,
+    reply_mode TEXT NOT NULL DEFAULT 'mention', updated_by TEXT, updated_at INTEGER NOT NULL)`);
+  old.prepare(`INSERT INTO channels VALUES ('c1', 'g1', 'general', 'mention', NULL, 0)`).run();
+  old.close();
+  const s = new Store(file);
+  assert.equal(s.getChannel('c1')!.threads, 0);
+  s.db.close();
+  fs.rmSync(dir, { recursive: true, force: true });
 });

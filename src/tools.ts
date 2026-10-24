@@ -118,12 +118,12 @@ export function buildDiscordTools(ctx: ToolContext) {
 
     tool(
       'quiet_thread',
-      'Stop replying in this thread unless someone @-mentions you again. Use when asked to stop, be quiet, or butt out of a thread.',
+      'Stop replying in this conversation (thread or reply chain) unless someone @-mentions you again. Use when asked to stop, be quiet, or butt out.',
       {},
       async () => {
         ctx.store.setThreadQuiet(ctx.threadId, true);
         ctx.onQuietThread();
-        return text('This thread is now quiet; I will reply only when @-mentioned.');
+        return text('This conversation is now quiet; I will reply only when @-mentioned.');
       },
     ),
 
