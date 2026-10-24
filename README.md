@@ -81,6 +81,14 @@ Also per bundle: `allowedRoleIds`, `model`, `maxTurns`, `maxBudgetUsd`, `instruc
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
 | `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `ANTHROPIC_BASE_URL` | – | Network settings passed through to the agent, only if your host needs them. |
 
+**Finding Discord IDs.** Turn on Developer Mode (User Settings → Advanced → Developer Mode), then right-click:
+
+- a person's name or avatar → **Copy User ID** (for `ADMIN_USER_IDS`)
+- a role in Server Settings → Roles → **Copy Role ID** (for `ADMIN_ROLE_IDS`)
+- the server icon → **Copy Server ID** (for `DEV_GUILD_ID`)
+
+Separate several IDs with commas, no quotes. Leaving the admin lists empty is fine: anyone with Manage Server is already an admin.
+
 Don't set `DATA_DIR` or `BUNDLES_FILE` in Dokploy: `docker-compose.yml` already sets them to the volume and the bundled config.
 
 A minimal setup looks like this:
