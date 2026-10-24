@@ -1,0 +1,53 @@
+{
+  "bundles": {
+    "general": {
+      "description": "Q&A, research and summaries. Web only.",
+      "capabilities": ["web"],
+      "maxTurns": 40,
+      "maxBudgetUsd": 1
+    },
+    "analysis": {
+      "description": "Web + a sandboxed shell for analysing files and data people upload.",
+      "capabilities": ["web", "code"],
+      "maxTurns": 80,
+      "maxBudgetUsd": 3
+    },
+    "engineering": {
+      "description": "Works on our GitHub repos: fixes bugs, opens PRs.",
+      "capabilities": ["web", "code", "github"],
+      "github": {
+        "tokenEnv": "GITHUB_TOKEN",
+        "repos": ["your-org/your-repo"],
+        "gitName": "Claude (Discord)",
+        "gitEmail": "claude-bot@users.noreply.github.com"
+      },
+      "mcpServers": {},
+      "allowedRoleIds": [],
+      "maxTurns": 150,
+      "maxBudgetUsd": 8,
+      "instructions": "Run the test suite before opening a PR. Keep PRs small and describe how you verified the change."
+    },
+    "ops-example-with-mcp": {
+      "description": "Example: connects remote MCP servers. Copy and edit, or delete.",
+      "capabilities": ["web"],
+      "mcpServers": {
+        "linear": {
+          "type": "http",
+          "url": "https://mcp.linear.app/mcp",
+          "headers": { "Authorization": "Bearer ${LINEAR_API_KEY}" }
+        }
+      },
+      "maxTurns": 60,
+      "maxBudgetUsd": 2
+    }
+  },
+  "dm": {
+    "bundle": null,
+    "allowedUserIds": []
+  },
+  "ambient": {
+    "maxPerHour": 4,
+    "minMessageLength": 20,
+    "contextMessages": 12
+  }
+}

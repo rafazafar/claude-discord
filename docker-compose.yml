@@ -1,0 +1,22 @@
+# For Dokploy: create a "Compose" service pointing at this repo, set the
+# environment variables in the Dokploy UI (see .env.example), and deploy.
+services:
+  claude-discord:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+      BUNDLES_FILE: /app/config/bundles.json
+    volumes:
+      - claude-data:/data
+      # Edit access bundles without rebuilding: mount your own file over the default.
+      # - ./config/bundles.json:/app/config/bundles.json:ro
+    # Gives the agent's shell room to work without starving the VPS.
+    mem_limit: 4g
+    cpus: 2
+    stop_grace_period: 20s
+
+volumes:
+  claude-data:
