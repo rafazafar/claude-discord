@@ -17,7 +17,7 @@
       "capabilities": ["web", "code", "github"],
       "github": {
         "tokenEnv": "GITHUB_TOKEN",
-        "repos": ["your-org/your-repo"],
+        "repos": [],
         "gitName": "Claude (Discord)",
         "gitEmail": "claude-bot@users.noreply.github.com"
       },
