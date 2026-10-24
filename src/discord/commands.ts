@@ -394,6 +394,7 @@ export class CommandHandler {
     if (b) {
       const tools = builtinTools(b);
       lines.push(`**Can use:** ${tools.length ? tools.join(', ') : 'no built-in tools'}${Object.keys(b.mcpServers).length ? ` · MCP: ${Object.keys(b.mcpServers).join(', ')}` : ''}`);
+      if (b.skills.length) lines.push(`**Skills:** ${b.skills === 'all' ? 'all' : b.skills.join(', ')}`);
       if (b.github) lines.push(`**Repos:** ${b.github.repos.join(', ') || 'any the token can reach'}`);
       lines.push(`**Model:** ${b.model ?? cfg.CLAUDE_MODEL} · **Limits:** ${b.maxTurns} steps, $${b.maxBudgetUsd}/task`);
     }

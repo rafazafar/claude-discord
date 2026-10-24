@@ -48,6 +48,8 @@ export const BundleSchema = z.object({
   maxBudgetUsd: z.number().positive().default(3),
   /** Extra standing instructions for every session on this bundle. */
   instructions: z.string().default(''),
+  /** Skills from config/plugin/skills Claude may use here, by directory name, or "all". Needs `code`. */
+  skills: z.union([z.literal('all'), z.array(z.string())]).default([]),
 });
 export type Bundle = z.infer<typeof BundleSchema>;
 
@@ -93,6 +95,10 @@ export function parseBundlesFile(raw: unknown): BundlesFile {
       // GitHub work needs a shell and file tools.
       b.capabilities.push('code');
       log.info('bundle: github implies code', { bundle: name });
+    }
+    if (b.skills.length && !b.capabilities.includes('code')) {
+      // Skills keep their reference files next to SKILL.md; Claude needs file tools to read them.
+      throw new Error(`bundle "${name}": skills need the "code" capability`);
     }
   }
   if (file.dm.bundle && !file.bundles[file.dm.bundle]) {

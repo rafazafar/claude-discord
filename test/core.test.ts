@@ -212,3 +212,14 @@ test('store: adds the threads column to databases from before it existed', () =>
   s.db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('bundles: skills need file tools and load from the team plugin', () => {
+  assert.throws(() => parseBundlesFile({ bundles: { web: { capabilities: ['web'], skills: ['project-estimation'] } } }), /skills need the "code" capability/);
+  const f = parseBundlesFile({ bundles: { a: { capabilities: ['code'], skills: ['project-estimation'] }, b: { capabilities: ['web'] } } });
+  assert.deepEqual(f.bundles.b!.skills, []);
+  const shipped = parseBundlesFile(JSON.parse(fs.readFileSync('config/bundles.json', 'utf8')));
+  for (const b of Object.values(shipped.bundles)) {
+    if (b.skills === 'all') continue;
+    for (const s of b.skills) assert.ok(fs.existsSync(path.join('config/plugin/skills', s, 'SKILL.md')), `missing skill ${s}`);
+  }
+});

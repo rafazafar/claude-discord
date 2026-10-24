@@ -1,0 +1,5 @@
+{
+  "name": "team",
+  "description": "Team skills for Claude in Discord. Bundles opt in to them by name in bundles.json.",
+  "version": "0.1.0"
+}

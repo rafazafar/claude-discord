@@ -41,7 +41,21 @@ Edit `config/bundles.json`. Capabilities:
 - `github`: `code` plus `git`/`gh` authenticated with the token in `github.tokenEnv`. Use a **fine-grained PAT scoped to the listed repos**: that's the real enforcement.
 - `mcpServers`: any stdio/http/sse MCP servers; `${VAR}` is replaced from the environment.
 
-Also per bundle: `allowedRoleIds`, `model`, `maxTurns`, `maxBudgetUsd`, `instructions`. The file is re-read automatically when it changes.
+Also per bundle: `allowedRoleIds`, `model`, `maxTurns`, `maxBudgetUsd`, `instructions`, `skills`. The file is re-read automatically when it changes.
+
+### Skills
+
+Team skills live in `config/plugin/skills/<name>/SKILL.md` (a local Claude Code plugin named `team`). A bundle lists the ones Claude may use, by folder name, or `"all"`:
+
+```json
+"skills": ["project-estimation"]
+```
+
+Skills need the `code` capability, because Claude reads a skill's reference files with its file tools. Included:
+
+- `project-estimation`: rough pre-signing estimate of a client project from a requirements doc (time, human vs AI effort, architecture, risks), written in Japanese. Enabled on `analysis` and `engineering`.
+
+To add one, put its folder under `config/plugin/skills/`, add its name to a bundle and redeploy.
 
 ## 4. Deploy on Dokploy
 

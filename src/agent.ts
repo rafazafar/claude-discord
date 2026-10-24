@@ -41,7 +41,12 @@ export interface AgentDeps {
   bundles: BundleRegistry;
   auth: AuthManager;
   agentHome: string;
+  /** Local plugin holding the team's skills (config/plugin). */
+  pluginDir: string;
 }
+
+/** Name in config/plugin/.claude-plugin/plugin.json; plugin skills are addressed as `team:<skill>`. */
+export const SKILLS_PLUGIN = 'team';
 
 /** Network/CA settings forwarded to the agent if the host sets them. */
 const PASSTHROUGH_ENV = [
@@ -132,6 +137,8 @@ export function buildOptions(deps: AgentDeps, input: RunInput, resume: string | 
   const builtins = builtinTools(bundle);
   const external = deps.bundles.mcpServers(bundle);
   const discord = buildDiscordTools(input.toolCtx);
+  const skills = bundle.skills === 'all' ? 'all' : bundle.skills.map((s) => `${SKILLS_PLUGIN}:${s}`);
+  const useSkills = skills === 'all' || skills.length > 0;
 
   const env = baseAgentEnv(deps.agentHome, deps.auth.credentialEnv());
   if (bundle.github) {
@@ -152,7 +159,8 @@ export function buildOptions(deps: AgentDeps, input: RunInput, resume: string | 
     env,
     resume: resume ?? undefined,
     abortController: input.abort,
-    tools: builtins,
+    tools: useSkills ? [...builtins, 'Skill'] : builtins,
+    ...(useSkills ? { plugins: [{ type: 'local' as const, path: deps.pluginDir }], skills } : {}),
     allowedTools: [...builtins, ...DISCORD_TOOL_NAMES, ...Object.keys(external).map((n) => `mcp__${n}`)],
     mcpServers: { ...external, discord },
     // Nothing outside allowedTools runs, and nobody is asked: there is no approval surface in Discord.

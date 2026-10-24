@@ -9,6 +9,7 @@
     "analysis": {
       "description": "Web + a sandboxed shell for analysing files and data people upload.",
       "capabilities": ["web", "code"],
+      "skills": ["project-estimation"],
       "maxTurns": 80,
       "maxBudgetUsd": 3
     },
@@ -22,6 +23,7 @@
         "gitEmail": "claude-bot@users.noreply.github.com"
       },
       "mcpServers": {},
+      "skills": ["project-estimation"],
       "allowedRoleIds": [],
       "maxTurns": 150,
       "maxBudgetUsd": 8,

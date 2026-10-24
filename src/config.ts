@@ -57,6 +57,7 @@ export type Config = z.infer<typeof EnvSchema> & {
   dbPath: string;
   workspacesDir: string;
   agentHome: string;
+  pluginDir: string;
 };
 
 function load(): Config {
@@ -87,6 +88,8 @@ function load(): Config {
     // HOME for the agent process: Claude Code keeps session transcripts under ~/.claude,
     // so it must live on the persistent volume for threads to resume after a redeploy.
     agentHome: path.join(env.DATA_DIR, 'home'),
+    // Team skills ship next to bundles.json as a local Claude Code plugin.
+    pluginDir: path.join(path.dirname(env.BUNDLES_FILE), 'plugin'),
   };
 }
 

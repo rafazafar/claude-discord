@@ -369,7 +369,7 @@ export class RunManager {
         trigger: first.trigger,
       });
       result = await runAgent(
-        { bundles, auth, agentHome: cfg.agentHome },
+        { bundles, auth, agentHome: cfg.agentHome, pluginDir: cfg.pluginDir },
         {
           prompt,
           bundle,
