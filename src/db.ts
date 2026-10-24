@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Effort } from './bundles.js';
 
 export type ReplyMode = 'mention' | 'ambient';
 export type MemoryScope = 'channel' | 'guild';
@@ -12,6 +13,8 @@ export interface ChannelRow {
   reply_mode: ReplyMode;
   /** 1: each tag opens a thread. 0: Claude replies inline and Discord replies continue the conversation. */
   threads: number;
+  /** Overrides the bundle's effort in this channel; null uses the bundle's. */
+  effort: Effort | null;
   updated_by: string | null;
   updated_at: number;
 }
@@ -73,6 +76,7 @@ CREATE TABLE IF NOT EXISTS channels (
   bundle     TEXT NOT NULL,
   reply_mode TEXT NOT NULL DEFAULT 'mention',
   threads    INTEGER NOT NULL DEFAULT 0,
+  effort     TEXT,
   updated_by TEXT,
   updated_at INTEGER NOT NULL
 );
@@ -165,6 +169,7 @@ export class Store {
   private migrate(): void {
     const cols = (this.db.prepare('PRAGMA table_info(channels)').all() as Array<{ name: string }>).map((c) => c.name);
     if (!cols.includes('threads')) this.db.exec('ALTER TABLE channels ADD COLUMN threads INTEGER NOT NULL DEFAULT 0');
+    if (!cols.includes('effort')) this.db.exec('ALTER TABLE channels ADD COLUMN effort TEXT');
   }
 
   // ---- channels -------------------------------------------------------------
@@ -200,6 +205,14 @@ export class Store {
       this.db
         .prepare('UPDATE channels SET threads = ?, updated_by = ?, updated_at = ? WHERE channel_id = ?')
         .run(on ? 1 : 0, by, Date.now(), channelId).changes > 0
+    );
+  }
+
+  setEffort(channelId: string, effort: Effort | null, by: string): boolean {
+    return (
+      this.db
+        .prepare('UPDATE channels SET effort = ?, updated_by = ?, updated_at = ? WHERE channel_id = ?')
+        .run(effort, by, Date.now(), channelId).changes > 0
     );
   }
 

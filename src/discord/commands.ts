@@ -11,7 +11,7 @@ import {
   type Interaction,
 } from 'discord.js';
 import type { Store, MemoryScope } from '../db.js';
-import type { BundleRegistry } from '../bundles.js';
+import type { BundleRegistry, Effort } from '../bundles.js';
 import { AUTH_LABEL, type AuthManager, type AuthMode } from '../auth.js';
 import type { Config } from '../config.js';
 import type { Scheduler } from '../scheduler.js';
@@ -55,6 +55,25 @@ export const command = new SlashCommandBuilder()
           .setDescription('off = reply in the channel (default); on = open a thread per task')
           .setRequired(true)
           .addChoices({ name: 'Off: reply in the channel', value: 'off' }, { name: 'On: open a thread per task', value: 'on' }),
+      ),
+  )
+  .addSubcommand((s) =>
+    s
+      .setName('effort')
+      .setDescription('Admin: how hard Claude thinks in this channel (higher is slower and costs more)')
+      .addStringOption((o) =>
+        o
+          .setName('level')
+          .setDescription("Effort level, or default to use the bundle's")
+          .setRequired(true)
+          .addChoices(
+            { name: 'Low: quick answers', value: 'low' },
+            { name: 'Medium', value: 'medium' },
+            { name: 'High', value: 'high' },
+            { name: 'Extra high', value: 'xhigh' },
+            { name: 'Max: hardest problems', value: 'max' },
+            { name: "Default: use the bundle's setting", value: 'default' },
+          ),
       ),
   )
   .addSubcommand((s) => s.setName('stop').setDescription("Stop Claude's current work in this thread or channel"))
@@ -305,6 +324,22 @@ export class CommandHandler {
         );
         return;
       }
+      case 'effort': {
+        if (!(await needGuild()) || !(await needAdmin())) return;
+        const level = i.options.getString('level', true);
+        const effort = level === 'default' ? null : (level as Effort);
+        if (!store.setEffort(channelId, effort, i.user.id)) {
+          await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
+          return;
+        }
+        const bundleEffort = bundles.get(store.getChannel(channelId)!.bundle)?.effort;
+        await i.reply(
+          effort
+            ? `🧠 Effort here is now **${effort}**. Applies to new work.`
+            : `🧠 Effort here now follows the bundle: **${bundleEffort ?? "the model's default"}**.`,
+        );
+        return;
+      }
       case 'stop': {
         if (!this.canWorkHere(i, channelId)) {
           await i.reply({ content: "You don't have access to Claude's work in this channel.", ...EPHEMERAL });
@@ -396,7 +431,9 @@ export class CommandHandler {
       lines.push(`**Can use:** ${tools.length ? tools.join(', ') : 'no built-in tools'}${Object.keys(b.mcpServers).length ? ` · MCP: ${Object.keys(b.mcpServers).join(', ')}` : ''}`);
       if (b.skills.length) lines.push(`**Skills:** ${b.skills === 'all' ? 'all' : b.skills.join(', ')}`);
       if (b.github) lines.push(`**Repos:** ${b.github.repos.join(', ') || 'any the token can reach'}`);
-      lines.push(`**Model:** ${b.model ?? cfg.CLAUDE_MODEL} · **Limits:** ${b.maxTurns} steps, $${b.maxBudgetUsd}/task`);
+      const ch = i.guild ? store.getChannel(channelId) : undefined;
+      const effort = ch?.effort ? `${ch.effort} (this channel)` : b.effort ? `${b.effort} (bundle)` : 'model default';
+      lines.push(`**Model:** ${b.model ?? cfg.CLAUDE_MODEL} · **Effort:** ${effort} · **Limits:** ${b.maxTurns} steps, $${b.maxBudgetUsd}/task`);
     }
     lines.push(`**Credential:** ${AUTH_LABEL[auth.mode()]}`);
     const mem = store.listMemories('channel', channelId).length + (i.guild ? store.listMemories('guild', i.guild.id).length : 0);

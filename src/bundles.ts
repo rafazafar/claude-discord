@@ -13,6 +13,10 @@ import { log, errMsg } from './log.js';
 export const Capability = z.enum(['web', 'code', 'github']);
 export type Capability = z.infer<typeof Capability>;
 
+/** How hard Claude thinks; higher is slower and costs more. Unset uses the model's default. */
+export const Effort = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+export type Effort = z.infer<typeof Effort>;
+
 const McpStdio = z.object({
   type: z.literal('stdio').optional(),
   command: z.string(),
@@ -44,6 +48,8 @@ export const BundleSchema = z.object({
   /** If non-empty, only members with one of these roles can hand Claude work in channels on this bundle. */
   allowedRoleIds: z.array(z.string()).default([]),
   model: z.string().optional(),
+  /** Default effort for channels on this bundle; admins can override per channel with /claude effort. */
+  effort: Effort.optional(),
   maxTurns: z.number().int().positive().default(80),
   maxBudgetUsd: z.number().positive().default(3),
   /** Extra standing instructions for every session on this bundle. */

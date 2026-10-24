@@ -1,5 +1,5 @@
 import { query, type Options, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { Bundle, BundleRegistry } from './bundles.js';
+import type { Bundle, BundleRegistry, Effort } from './bundles.js';
 import type { AuthManager } from './auth.js';
 import { buildDiscordTools, DISCORD_TOOL_NAMES, type ToolContext } from './tools.js';
 import { log, errMsg } from './log.js';
@@ -18,6 +18,8 @@ export interface RunInput {
   sessionId: string | null;
   cwd: string;
   model: string;
+  /** Unset: the model's default. */
+  effort?: Effort;
   context: RunContext;
   toolCtx: ToolContext;
   abort: AbortController;
@@ -155,6 +157,7 @@ export function buildOptions(deps: AgentDeps, input: RunInput, resume: string | 
 
   return {
     model: input.model,
+    ...(input.effort ? { effort: input.effort } : {}),
     cwd: input.cwd,
     env,
     resume: resume ?? undefined,

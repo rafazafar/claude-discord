@@ -41,7 +41,9 @@ Edit `config/bundles.json`. Capabilities:
 - `github`: `code` plus `git`/`gh` authenticated with the token in `github.tokenEnv`. Use a **fine-grained PAT scoped to the listed repos**: that's the real enforcement.
 - `mcpServers`: any stdio/http/sse MCP servers; `${VAR}` is replaced from the environment.
 
-Also per bundle: `allowedRoleIds`, `model`, `maxTurns`, `maxBudgetUsd`, `instructions`, `skills`. The file is re-read automatically when it changes.
+Also per bundle: `allowedRoleIds`, `model`, `effort`, `maxTurns`, `maxBudgetUsd`, `instructions`, `skills`.
+
+`effort` (`low`, `medium`, `high`, `xhigh` or `max`) sets how hard Claude thinks; higher is slower and costs more. Leave it out to use the model's default. Admins can override it per channel with `/claude effort`. The file is re-read automatically when it changes.
 
 ### Skills
 
@@ -135,7 +137,7 @@ In a channel, an admin runs `/claude enable bundle:engineering`. Then anyone:
 @Claude from now on, answer in Japanese in this channel
 ```
 
-Commands: `/claude status · enable · disable · reply · threads · stop · reset · memory … · schedule … · auth · usage · bundles`.
+Commands: `/claude status · enable · disable · reply · threads · effort · stop · reset · memory … · schedule … · auth · usage · bundles`.
 
 ## Security notes
 

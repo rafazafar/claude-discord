@@ -376,6 +376,7 @@ export class RunManager {
           sessionId: thread.session_id,
           cwd: thread.cwd,
           model: bundle.model ?? cfg.CLAUDE_MODEL,
+          effort: store.getChannel(first.configChannelId)?.effort ?? bundle.effort,
           context: {
             guildName: first.guildName,
             channelName: first.configChannelName,

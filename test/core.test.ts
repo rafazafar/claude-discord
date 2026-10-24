@@ -209,6 +209,7 @@ test('store: adds the threads column to databases from before it existed', () =>
   old.close();
   const s = new Store(file);
   assert.equal(s.getChannel('c1')!.threads, 0);
+  assert.equal(s.getChannel('c1')!.effort, null);
   s.db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -222,4 +223,20 @@ test('bundles: skills need file tools and load from the team plugin', () => {
     if (b.skills === 'all') continue;
     for (const s of b.skills) assert.ok(fs.existsSync(path.join('config/plugin/skills', s, 'SKILL.md')), `missing skill ${s}`);
   }
+});
+
+test('effort: bundle default, per-channel override, old databases', () => {
+  const f = parseBundlesFile({ bundles: { a: { effort: 'low' }, b: {} } });
+  assert.equal(f.bundles.a!.effort, 'low');
+  assert.equal(f.bundles.b!.effort, undefined);
+  assert.throws(() => parseBundlesFile({ bundles: { a: { effort: 'turbo' } } }));
+
+  const s = new Store(':memory:');
+  s.enableChannel('c1', 'g1', 'a', 'u1');
+  assert.equal(s.getChannel('c1')!.effort, null);
+  assert.ok(s.setEffort('c1', 'high', 'u1'));
+  assert.equal(s.getChannel('c1')!.effort, 'high');
+  assert.ok(s.setEffort('c1', null, 'u1'));
+  assert.equal(s.getChannel('c1')!.effort, null);
+  assert.equal(s.setEffort('nope', 'low', 'u1'), false);
 });
