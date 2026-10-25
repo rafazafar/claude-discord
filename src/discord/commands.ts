@@ -313,11 +313,13 @@ export class CommandHandler {
           return;
         }
         store.enableChannel(channelId, i.guild!.id, name, i.user.id);
-        await i.reply(
-          `✅ Claude is enabled here with the **${name}** bundle (${bundle.capabilities.join(', ')}${
+        // Only the admin sees this, so setting Claude up doesn't announce itself in the channel.
+        await i.reply({
+          content: `✅ Claude is enabled here with the **${name}** bundle (${bundle.capabilities.join(', ')}${
             Object.keys(bundle.mcpServers).length ? `, ${Object.keys(bundle.mcpServers).join(', ')}` : ''
           }). Tag <@${this.d.client.user!.id}> with a task to get started.`,
-        );
+          ...EPHEMERAL,
+        });
         return;
       }
       case 'disable': {
