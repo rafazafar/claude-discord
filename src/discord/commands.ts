@@ -313,7 +313,7 @@ export class CommandHandler {
           return;
         }
         store.enableChannel(channelId, i.guild!.id, name, i.user.id);
-        // Only the admin sees this, so setting Claude up doesn't announce itself in the channel.
+        // Settings commands confirm privately, so configuring Claude doesn't announce itself in the channel.
         await i.reply({
           content: `✅ Claude is enabled here with the **${name}** bundle (${bundle.capabilities.join(', ')}${
             Object.keys(bundle.mcpServers).length ? `, ${Object.keys(bundle.mcpServers).join(', ')}` : ''
@@ -325,7 +325,7 @@ export class CommandHandler {
       case 'disable': {
         if (!(await needGuild()) || !(await needAdmin())) return;
         const ok = store.disableChannel(channelId);
-        await i.reply(ok ? '👋 Claude is removed from this channel. Schedules here will stop running.' : { content: 'Claude was not enabled here.', ...EPHEMERAL });
+        await i.reply({ content: ok ? '👋 Claude is removed from this channel. Schedules here will stop running.' : 'Claude was not enabled here.', ...EPHEMERAL });
         return;
       }
       case 'status':
@@ -339,11 +339,13 @@ export class CommandHandler {
           await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
           return;
         }
-        await i.reply(
-          mode === 'ambient'
-            ? `🔔 Ambient mode on: Claude may jump in when it can clearly help (max ${bundles.ambient.maxPerHour}/hour).`
-            : '🔕 Claude will only reply when mentioned or in its own threads.',
-        );
+        await i.reply({
+          content:
+            mode === 'ambient'
+              ? `🔔 Ambient mode on: Claude may jump in when it can clearly help (max ${bundles.ambient.maxPerHour}/hour).`
+              : '🔕 Claude will only reply when mentioned or in its own threads.',
+          ...EPHEMERAL,
+        });
         return;
       }
       case 'threads': {
@@ -353,11 +355,12 @@ export class CommandHandler {
           await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
           return;
         }
-        await i.reply(
-          on
+        await i.reply({
+          content: on
             ? '🧵 Claude will open a thread for each task here.'
             : '💬 Claude will reply in the channel. Reply to one of its messages to continue, or start a thread yourself and tag it there.',
-        );
+          ...EPHEMERAL,
+        });
         return;
       }
       case 'model': {
@@ -369,11 +372,12 @@ export class CommandHandler {
           return;
         }
         const bundleModel = bundles.get(store.getChannel(channelId)!.bundle)?.model ?? cfg.CLAUDE_MODEL;
-        await i.reply(
-          model
+        await i.reply({
+          content: model
             ? `🤖 Claude now uses **${model}** in this channel. Applies to new work.`
             : `🤖 This channel now uses the bundle's model: **${bundleModel}**.`,
-        );
+          ...EPHEMERAL,
+        });
         return;
       }
       case 'effort': {
@@ -385,11 +389,12 @@ export class CommandHandler {
           return;
         }
         const bundleEffort = bundles.get(store.getChannel(channelId)!.bundle)?.effort;
-        await i.reply(
-          effort
+        await i.reply({
+          content: effort
             ? `🧠 Effort here is now **${effort}**. Applies to new work.`
             : `🧠 Effort here now follows the bundle: **${bundleEffort ?? "the model's default"}**.`,
-        );
+          ...EPHEMERAL,
+        });
         return;
       }
       case 'stop': {
