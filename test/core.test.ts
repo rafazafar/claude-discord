@@ -12,6 +12,8 @@ import { validateCron, resolveInside } from '../src/tools.js';
 import { parseDecision } from '../src/ambient.js';
 import { builtinTools, systemAppend } from '../src/agent.js';
 import { Semaphore } from '../src/semaphore.js';
+import { RunManager, type WorkItem } from '../src/discord/runs.js';
+import { askKey } from '../src/discord/ask.js';
 
 test('splitMessage keeps chunks under limit and balances code fences', () => {
   const code = '```ts\n' + Array.from({ length: 200 }, (_, i) => `const x${i} = ${i};`).join('\n') + '\n```';
@@ -239,4 +241,28 @@ test('effort: bundle default, per-channel override, old databases', () => {
   assert.ok(s.setEffort('c1', null, 'u1'));
   assert.equal(s.getChannel('c1')!.effort, null);
   assert.equal(s.setEffort('nope', 'low', 'u1'), false);
+});
+
+test('private asks: own key per person and channel, and a prompt that says only the asker sees it', () => {
+  assert.notEqual(askKey('c1', 'u1'), askKey('c1', 'u2'));
+  assert.notEqual(askKey('c1', 'u1'), askKey('c2', 'u1'));
+
+  const store = new Store(':memory:');
+  const runs = new RunManager({ store, cfg: { MAX_CONCURRENT_RUNS: 1, DEFAULT_TIMEZONE: 'UTC' } } as unknown as ConstructorParameters<typeof RunManager>[0]);
+  const item = {
+    key: askKey('c1', 'u1'),
+    trigger: 'private',
+    guildId: 'g1',
+    configChannelId: 'c1',
+    userId: 'u1',
+    userName: 'Zafar',
+    content: 'what is tanaka saying?',
+    contextLines: ['[2026-10-26 09:00] Tanaka: 木曜日にずらせますか'],
+    locale: 'en-US',
+  } as unknown as WorkItem;
+  const prompt = runs.buildPrompt([item], []);
+  assert.match(prompt, /Only the asker sees your answer/);
+  assert.match(prompt, /en-US/);
+  assert.match(prompt, /Tanaka: 木曜日にずらせますか/);
+  assert.doesNotMatch(runs.buildPrompt([{ ...item, trigger: 'mention' } as WorkItem], []), /Only the asker/);
 });

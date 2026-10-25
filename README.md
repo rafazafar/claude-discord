@@ -12,6 +12,7 @@ A Claude Tag–style teammate for Discord, built on the [Claude Agent SDK](https
 | Channel memory | "From now on…" instructions are saved per channel or server and fed into every session. Manage with `/claude memory`. |
 | Ambient behaviour | `/claude reply mode:ambient` lets Claude jump in when a small model judges it can clearly help. Rate-limited per channel. |
 | Standing scheduled work | "Every weekday at 9am, summarise yesterday" → a cron schedule that posts each run in the channel (or in a fresh thread when threads are on) (text and announcement channels; not forums). |
+| Private questions | `/claude ask` asks Claude about the channel so only you see it: the command, your prompt and the answer are hidden from everyone else. Or right-click a message → **Apps** → **Ask Claude privately** to ask about the conversation from that message on (e.g. "what are they saying? translate and explain the tone"). Follow-up asks in the same channel continue your private session; `new:true` starts over. |
 | Quieting | "Stop replying here" → quiet thread or reply chain; `/claude reply mode:mention` → mention-only. |
 | DMs | Optional (off by default), on their own bundle. |
 | Switchable credential | API key or Claude plan sign-in; flip live with `/claude auth`. |
@@ -137,7 +138,7 @@ In a channel, an admin runs `/claude enable bundle:engineering`. Then anyone:
 @Claude from now on, answer in Japanese in this channel
 ```
 
-Commands: `/claude status · enable · disable · reply · threads · effort · stop · reset · memory … · schedule … · auth · usage · bundles`.
+Commands: `/claude ask · status · enable · disable · reply · threads · effort · stop · reset · memory … · schedule … · auth · usage · bundles`.
 
 ## Security notes
 

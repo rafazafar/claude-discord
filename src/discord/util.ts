@@ -22,8 +22,13 @@ export function formatMessageLine(m: Message): string {
 
 /** Fetches up to `limit` messages before `before` (or latest), oldest first. */
 export async function fetchLines(channel: TextBasedChannel, limit: number, before?: string): Promise<string[]> {
+  return (await fetchMessages(channel, limit, before)).map(formatMessageLine);
+}
+
+/** Like fetchLines, but the messages themselves (system messages skipped), oldest first. */
+export async function fetchMessages(channel: TextBasedChannel, limit: number, before?: string): Promise<Message[]> {
   if (limit <= 0) return [];
-  const lines: string[] = [];
+  const out: Message[] = [];
   let cursor = before;
   let remaining = limit;
   while (remaining > 0) {
@@ -35,13 +40,13 @@ export async function fetchLines(channel: TextBasedChannel, limit: number, befor
     const sorted = [...batch.values()].sort((a, b) => b.createdTimestamp - a.createdTimestamp);
     for (const m of sorted) {
       if (m.system) continue;
-      lines.push(formatMessageLine(m));
+      out.push(m);
     }
     cursor = sorted[sorted.length - 1]!.id;
     remaining -= batch.size;
     if (batch.size < 100) break;
   }
-  return lines.reverse();
+  return out.reverse();
 }
 
 export function stripBotMention(content: string, botId: string): string {

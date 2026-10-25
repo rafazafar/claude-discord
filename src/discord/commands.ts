@@ -18,6 +18,7 @@ import type { Scheduler } from '../scheduler.js';
 import { builtinTools } from '../agent.js';
 import { validateCron } from '../tools.js';
 import { STOP_PREFIX, type RunManager } from './runs.js';
+import { ASK_MENU, AskHandler, askKey, askMenuCommand } from './ask.js';
 import { hasAnyRole, isAdmin } from './util.js';
 import { truncate } from '../format.js';
 import { log, errMsg } from '../log.js';
@@ -25,6 +26,15 @@ import { log, errMsg } from '../log.js';
 export const command = new SlashCommandBuilder()
   .setName('claude')
   .setDescription('Configure and control Claude in this server')
+  .addSubcommand((s) =>
+    s
+      .setName('ask')
+      .setDescription('Ask Claude privately about this channel: only you see the question and the answer')
+      .addStringOption((o) =>
+        o.setName('prompt').setDescription('e.g. What are they discussing? Translate the last few messages.').setRequired(true).setMaxLength(4000),
+      )
+      .addBooleanOption((o) => o.setName('new').setDescription('Forget your earlier private questions here and start fresh')),
+  )
   .addSubcommand((s) =>
     s
       .setName('enable')
@@ -167,7 +177,7 @@ export const command = new SlashCommandBuilder()
 
 export async function registerCommands(cfg: Config): Promise<void> {
   const rest = new REST({ version: '10' }).setToken(cfg.DISCORD_TOKEN);
-  const body = [command.toJSON()];
+  const body = [command.toJSON(), askMenuCommand.toJSON()];
   if (cfg.DEV_GUILD_ID) {
     await rest.put(Routes.applicationGuildCommands(cfg.DISCORD_APP_ID, cfg.DEV_GUILD_ID), { body });
     log.info('registered guild commands', { guild: cfg.DEV_GUILD_ID });
@@ -190,18 +200,24 @@ export interface CommandDeps {
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
 export class CommandHandler {
-  constructor(private readonly d: CommandDeps) {}
+  private readonly ask: AskHandler;
+
+  constructor(private readonly d: CommandDeps) {
+    this.ask = new AskHandler(d);
+  }
 
   async onInteraction(i: Interaction): Promise<void> {
     try {
       if (i.isAutocomplete()) return await this.autocomplete(i);
       if (i.isButton() && i.customId.startsWith(STOP_PREFIX)) return await this.stopButton(i);
+      if (i.isMessageContextMenuCommand() && i.commandName === ASK_MENU) return await this.ask.menu(i);
+      if (i.isModalSubmit() && this.ask.isModal(i.customId)) return await this.ask.modal(i);
       if (i.isChatInputCommand() && i.commandName === 'claude') return await this.command(i);
     } catch (e) {
       log.error('interaction failed', { error: errMsg(e) });
-      if (i.isRepliable() && !i.replied && !i.deferred) {
-        await i.reply({ content: `⚠️ ${truncate(errMsg(e), 300)}`, ...EPHEMERAL }).catch(() => {});
-      }
+      const content = `⚠️ ${truncate(errMsg(e), 300)}`;
+      if (i.isRepliable() && !i.replied && !i.deferred) await i.reply({ content, ...EPHEMERAL }).catch(() => {});
+      else if (i.isRepliable() && i.deferred && !i.replied) await i.editReply({ content }).catch(() => {});
     }
   }
 
@@ -257,6 +273,7 @@ export class CommandHandler {
       return false;
     };
 
+    if (sub === 'ask' && !group) return this.ask.slash(i);
     if (group === 'memory') return this.memory(i, sub, channelId, needAdmin);
     if (group === 'schedule') return this.schedule(i, sub, channelId);
 
@@ -346,7 +363,10 @@ export class CommandHandler {
           return;
         }
         // In a channel, inline conversations have no thread of their own: stop everything running here.
-        const ok = this.d.runs.stop(i.channelId) || (!i.channel?.isThread() && this.d.runs.stopChannel(i.channelId) > 0);
+        const ok =
+          this.d.runs.stop(askKey(i.channelId, i.user.id)) ||
+          this.d.runs.stop(i.channelId) ||
+          (!i.channel?.isThread() && this.d.runs.stopChannel(i.channelId) > 0);
         await i.reply({ content: ok ? '⏹️ Stopping…' : 'Nothing is running here.', ...EPHEMERAL });
         return;
       }

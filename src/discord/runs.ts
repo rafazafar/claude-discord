@@ -19,7 +19,10 @@ import { describeTool, formatDuration, splitMessage, tablesToCodeBlocks, truncat
 import { log, errMsg } from '../log.js';
 import { ensureAgentDir, giveToAgent } from '../sandbox.js';
 
-export type Trigger = 'mention' | 'thread' | 'dm' | 'ambient' | 'schedule';
+export type Trigger = 'mention' | 'thread' | 'dm' | 'ambient' | 'schedule' | 'private';
+
+/** Delivers part of a private answer (/claude ask): visible only to the asker. */
+export type PrivateReply = (payload: { content?: string; files?: AttachmentBuilder[] }) => Promise<void>;
 
 export interface WorkAttachment {
   name: string;
@@ -52,6 +55,10 @@ export interface WorkItem {
    * message it posts is linked so replying to it continues this conversation.
    */
   inline?: boolean;
+  /** Set for /claude ask: everything goes here instead of the channel, with no progress message. */
+  privateReply?: PrivateReply;
+  /** The asker's Discord language (private questions). */
+  locale?: string;
   sourceMessage?: Message;
   fetchHistory: (limit: number) => Promise<string[]>;
 }
@@ -69,9 +76,11 @@ interface ActiveRun {
   abort: AbortController;
   startedBy: string;
   channelId: string;
+  private: boolean;
 }
 
 type Send = (payload: MessageCreateOptions) => Promise<Message>;
+type Out = (payload: MessageCreateOptions, asReply?: boolean) => Promise<unknown>;
 
 export interface RunManagerDeps {
   store: Store;
@@ -203,11 +212,11 @@ export class RunManager {
     return true;
   }
 
-  /** Stops every run in a channel (inline conversations have no thread of their own to stop from). */
+  /** Stops every public run in a channel (inline conversations have no thread of their own to stop from). */
   stopChannel(channelId: string): number {
     let n = 0;
     for (const run of this.active.values()) {
-      if (run.channelId !== channelId) continue;
+      if (run.channelId !== channelId || run.private) continue;
       run.abort.abort();
       n++;
     }
@@ -230,8 +239,10 @@ export class RunManager {
         } catch (e) {
           log.error('run failed', { key, error: errMsg(e) });
           try {
-            const ch = await items[0]!.getChannel();
-            await ch.send(`⚠️ Something went wrong: ${truncate(errMsg(e), 300)}`);
+            const content = `⚠️ Something went wrong: ${truncate(errMsg(e), 300)}`;
+            const priv = items[0]!.privateReply;
+            if (priv) await priv({ content });
+            else await (await items[0]!.getChannel()).send(content);
           } catch {
             /* ignore */
           }
@@ -296,6 +307,14 @@ export class RunManager {
     if (first.trigger === 'schedule') {
       ctx.push('', 'This is a scheduled run of standing work. Post the result as your final message.');
     }
+    if (first.trigger === 'private') {
+      ctx.push(
+        '',
+        'This is a private question asked with /claude ask. Only the asker sees your answer; nobody else in the channel knows they asked.',
+        'The earlier conversation is what they are asking about. They may not read its language well: when they ask what people said, translate and explain it, including tone and anything implied.',
+        `Answer in the language of their question${first.locale ? ` (their Discord language is ${first.locale})` : ''}. Keep it short unless they ask for detail.`,
+      );
+    }
 
     const msgs = items
       .map((i) => `<message from="${i.userName.replace(/"/g, "'")}">\n${escapeTags(i.content) || '(no text)'}\n</message>`)
@@ -311,8 +330,9 @@ export class RunManager {
     if (!thread) throw new Error('conversation not registered');
     const bundle = bundles.get(first.bundleName);
     if (!bundle) {
-      const ch = await first.getChannel();
-      await ch.send(`⚠️ Access bundle "${first.bundleName}" no longer exists. An admin can fix this with \`/claude enable\`.`);
+      const content = `⚠️ Access bundle "${first.bundleName}" no longer exists. An admin can fix this with \`/claude enable\`.`;
+      if (first.privateReply) await first.privateReply({ content });
+      else await (await first.getChannel()).send(content);
       return;
     }
     // The system prompt is recorded per session; if the channel's bundle changed, start fresh
@@ -323,6 +343,7 @@ export class RunManager {
     }
 
     const lazy = first.trigger === 'ambient';
+    const priv = first.privateReply;
     const files = await this.downloadAttachments(items, thread.cwd);
     const prompt = this.buildPrompt(items, files);
 
@@ -336,12 +357,16 @@ export class RunManager {
       if (first.inline) store.linkMessage(msg.id, first.key);
       return msg;
     };
+    // Where the answer goes: the channel, or only the asker for a private question.
+    const out: Out = priv
+      ? (payload) => priv({ content: payload.content ?? undefined, files: payload.files as AttachmentBuilder[] | undefined })
+      : send;
 
     // Register before queueing for a slot so Stop works while queued.
     const abort = new AbortController();
-    this.active.set(first.key, { abort, startedBy: last.userId, channelId: first.configChannelId });
+    this.active.set(first.key, { abort, startedBy: last.userId, channelId: first.configChannelId, private: !!priv });
 
-    if (!lazy) {
+    if (!lazy && !priv) {
       status = new StatusReporter((p) => send(p, true), first.key);
       await status.start(this.sem.inUse >= cfg.MAX_CONCURRENT_RUNS ? '⏳ Queued behind other work…' : undefined);
     }
@@ -394,11 +419,12 @@ export class RunManager {
             workspace: thread.cwd,
             defaultTimezone: cfg.DEFAULT_TIMEZONE,
             sendFile: async (abs, caption) => {
-              await send({ content: caption ?? undefined, files: [new AttachmentBuilder(abs)] });
+              await out({ content: caption ?? undefined, files: [new AttachmentBuilder(abs)] });
             },
             fetchHistory: first.fetchHistory,
             onSchedulesChanged: this.deps.onSchedulesChanged,
             onQuietThread: () => {},
+            privateAsk: !!priv,
           },
           onToolUse: (name, input) => status?.step(describeTool(name, input)),
           onSession: (sid) => store.setThreadSession(first.key, sid),
@@ -437,28 +463,34 @@ export class RunManager {
     }
 
     const footer = `· ${elapsed} · ${steps} step${steps === 1 ? '' : 's'}${cost}`;
+    const more = priv ? 'Ask again with `/claude ask` to keep going.' : 'Reply "continue" to keep going.';
+    let line: string;
     switch (result.status) {
       case 'success':
-        await status?.finish(`✅ Done ${footer}`);
+        line = `✅ Done ${footer}`;
         break;
       case 'aborted':
-        await status?.finish(`⏹️ Stopped ${footer}`);
+        line = `⏹️ Stopped ${footer}`;
         break;
       case 'max_turns':
-        await status?.finish(`⚠️ Hit the step limit (${bundle.maxTurns}) ${footer}. Reply "continue" to keep going.`);
+        line = `⚠️ Hit the step limit (${bundle.maxTurns}) ${footer}. ${more}`;
         break;
       case 'budget':
-        await status?.finish(`⚠️ Hit this channel's per-task budget ($${bundle.maxBudgetUsd}) ${footer}. Reply "continue" to keep going.`);
+        line = `⚠️ Hit this channel's per-task budget ($${bundle.maxBudgetUsd}) ${footer}. ${more}`;
         break;
       default:
-        await status?.finish(`⚠️ ${truncate(result.error ?? 'Something went wrong.', 1800)} ${footer}`);
+        line = `⚠️ ${truncate(result.error ?? 'Something went wrong.', 1800)} ${footer}`;
     }
+    const body = result.status !== 'error' ? result.text.trim() : '';
+    if (status) await status.finish(line);
+    // A private answer has no progress message: show the outcome only when it isn't a plain success.
+    else if (priv && (result.status !== 'success' || !body)) await out({ content: line });
     // On errors the text is usually the raw error, already summarised in the status line.
-    if (result.status !== 'error' && result.text.trim()) await this.postText(send, result.text);
+    if (body) await this.postText(out, body);
   }
 
   /** Posts the answer; inline, its first chunk is a reply so it's clear what it answers. */
-  private async postText(send: (payload: MessageCreateOptions, asReply?: boolean) => Promise<Message>, text: string) {
+  private async postText(send: Out, text: string) {
     let first = true;
     for (const chunk of splitMessage(tablesToCodeBlocks(text))) {
       await send({ content: chunk, allowedMentions: { parse: ['users'] } }, first);

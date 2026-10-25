@@ -30,7 +30,12 @@ export interface ToolContext {
   onSchedulesChanged: () => void;
   /** Called after the thread is asked to go quiet. */
   onQuietThread: () => void;
+  /** A private /claude ask: only tools that change nothing others would see. */
+  privateAsk?: boolean;
 }
+
+/** What a private question may use: nothing that changes the channel for everyone. */
+const PRIVATE_TOOLS = new Set(['list_memories', 'list_schedules', 'send_file', 'read_channel_history']);
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // Discord's default bot upload limit
 
@@ -215,7 +220,7 @@ export function buildDiscordTools(ctx: ToolContext) {
     version: '0.1.0',
     instructions:
       'Tools for working inside Discord: channel memory, reply mode, scheduled standing work, uploading files, and reading channel history.',
-    tools,
+    tools: ctx.privateAsk ? tools.filter((t) => PRIVATE_TOOLS.has(t.name)) : tools,
   });
 }
 
