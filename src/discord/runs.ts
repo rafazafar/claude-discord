@@ -18,6 +18,8 @@ import { runAgent, type RunResult } from '../agent.js';
 import { describeTool, formatDuration, splitMessage, tablesToCodeBlocks, truncate } from '../format.js';
 import { log, errMsg } from '../log.js';
 import { ensureAgentDir, giveToAgent } from '../sandbox.js';
+import { effectiveEffort, shortModel } from '../flags.js';
+import type { Effort } from '../bundles.js';
 
 export type Trigger = 'mention' | 'thread' | 'dm' | 'ambient' | 'schedule' | 'private';
 
@@ -59,6 +61,9 @@ export interface WorkItem {
   privateReply?: PrivateReply;
   /** The asker's Discord language (private questions). */
   locale?: string;
+  /** Model and effort asked for on this message (--sonnet, --high…), over the channel's settings. */
+  modelOverride?: string;
+  effortOverride?: Effort;
   sourceMessage?: Message;
   fetchHistory: (limit: number) => Promise<string[]>;
 }
@@ -344,6 +349,12 @@ export class RunManager {
 
     const lazy = first.trigger === 'ambient';
     const priv = first.privateReply;
+    // Message flags win, then /claude model and /claude effort for the channel, then the bundle.
+    const channelRow = store.getChannel(first.configChannelId);
+    const flagged = [...items].reverse();
+    const model = flagged.find((i) => i.modelOverride)?.modelOverride ?? channelRow?.model ?? bundle.model ?? cfg.CLAUDE_MODEL;
+    const effort = effectiveEffort(model, flagged.find((i) => i.effortOverride)?.effortOverride ?? channelRow?.effort ?? bundle.effort);
+    const working = `⏳ Working on it… · ${shortModel(model)} · ${effort}`;
     const files = await this.downloadAttachments(items, thread.cwd);
     const prompt = this.buildPrompt(items, files);
 
@@ -368,7 +379,7 @@ export class RunManager {
 
     if (!lazy && !priv) {
       status = new StatusReporter((p) => send(p, true), first.key);
-      await status.start(this.sem.inUse >= cfg.MAX_CONCURRENT_RUNS ? '⏳ Queued behind other work…' : undefined);
+      await status.start(this.sem.inUse >= cfg.MAX_CONCURRENT_RUNS ? '⏳ Queued behind other work…' : working);
     }
 
     const release = await this.sem.acquire();
@@ -378,14 +389,12 @@ export class RunManager {
       await status?.finish('⏹️ Stopped before it started.');
       return;
     }
-    status?.setHeader('⏳ Working on it…');
+    status?.setHeader(working);
     const started = Date.now();
     const prevSession = thread.session_id;
     const prevCost = thread.session_cost;
     let runId: number | null = null;
     let result: RunResult;
-    // Per-channel overrides set with /claude model and /claude effort.
-    const channelRow = store.getChannel(first.configChannelId);
 
     try {
       runId = store.startRun({
@@ -402,8 +411,8 @@ export class RunManager {
           bundle,
           sessionId: thread.session_id,
           cwd: thread.cwd,
-          model: channelRow?.model ?? bundle.model ?? cfg.CLAUDE_MODEL,
-          effort: channelRow?.effort ?? bundle.effort,
+          model,
+          effort,
           context: {
             guildName: first.guildName,
             channelName: first.configChannelName,
@@ -478,7 +487,7 @@ export class RunManager {
         line = `⚠️ Hit the step limit (${bundle.maxTurns}) ${footer}. ${more}`;
         break;
       case 'budget':
-        line = `⚠️ Hit this channel's per-task budget ($${bundle.maxBudgetUsd}) ${footer}. ${more}`;
+        line = `⚠️ Hit this bundle's per-task budget ($${bundle.maxBudgetUsd}) ${footer}. ${more}`;
         break;
       default:
         line = `⚠️ ${truncate(result.error ?? 'Something went wrong.', 1800)} ${footer}`;

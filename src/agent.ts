@@ -178,7 +178,7 @@ export function buildOptions(deps: AgentDeps, input: RunInput, resume: string | 
       snapshot: true,
     },
     maxTurns: bundle.maxTurns,
-    maxBudgetUsd: bundle.maxBudgetUsd,
+    ...(bundle.maxBudgetUsd ? { maxBudgetUsd: bundle.maxBudgetUsd } : {}),
     pathToClaudeCodeExecutable: agentLaunch().pathToClaudeCodeExecutable,
     stderr: (d) => log.debug('agent stderr', { d: d.slice(0, 500) }),
   };

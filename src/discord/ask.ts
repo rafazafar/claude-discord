@@ -21,6 +21,8 @@ import type { Config } from '../config.js';
 import type { PrivateReply, RunManager } from './runs.js';
 import { fetchLines, fetchMessages, formatMessageLine, hasAnyRole, isAdmin, workspaceFor } from './util.js';
 import { log, errMsg } from '../log.js';
+import { MODEL_ALIASES } from '../flags.js';
+import type { Effort } from '../bundles.js';
 
 /**
  * Private questions: /claude ask and the "Ask Claude privately" and "Translate from here"
@@ -72,7 +74,12 @@ export class AskHandler {
   constructor(private readonly d: AskDeps) {}
 
   async slash(i: ChatInputCommandInteraction) {
-    await this.run(i, i.options.getString('prompt', true), { fresh: i.options.getBoolean('new') ?? false });
+    const model = i.options.getString('model');
+    await this.run(i, i.options.getString('prompt', true), {
+      fresh: i.options.getBoolean('new') ?? false,
+      model: model ? MODEL_ALIASES[model] : undefined,
+      effort: (i.options.getString('effort') as Effort | null) ?? undefined,
+    });
   }
 
   /**
@@ -108,7 +115,7 @@ export class AskHandler {
     await this.run(i, i.fields.getTextInputValue('prompt'), { fresh: false, anchorId: i.customId.slice(MODAL_PREFIX.length) });
   }
 
-  private async run(i: AskInteraction, prompt: string, opts: { fresh: boolean; anchorId?: string }) {
+  private async run(i: AskInteraction, prompt: string, opts: { fresh: boolean; anchorId?: string; model?: string; effort?: Effort }) {
     const { store, bundles, cfg, runs } = this.d;
     const channel = i.channel;
     if (!i.inGuild() || !i.guild || !channel?.isTextBased()) {
@@ -169,6 +176,8 @@ export class AskHandler {
       fetchHistory: (limit) => fetchLines(channel, limit),
       privateReply: privateReplier(i),
       locale: i.locale,
+      modelOverride: opts.model,
+      effortOverride: opts.effort,
     });
   }
 

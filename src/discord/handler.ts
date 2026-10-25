@@ -17,6 +17,7 @@ import { shouldJumpIn } from '../ambient.js';
 import { threadTitle } from '../format.js';
 import { fetchLines, hasAnyRole, isAdmin, stripBotMention, workspaceFor } from './util.js';
 import { log, errMsg } from '../log.js';
+import { parseRunFlags } from '../flags.js';
 
 export interface HandlerDeps {
   client: Client;
@@ -58,6 +59,7 @@ export class MessageHandler {
   }
 
   private baseItem(m: Message, trigger: Trigger, bundleName: string, configChannel: { id: string; name: string }): Omit<WorkItem, 'key' | 'getChannel' | 'contextLines' | 'fetchHistory'> {
+    const flags = parseRunFlags(stripBotMention(m.content, this.botId));
     return {
       trigger,
       guildId: m.guild?.id ?? null,
@@ -68,7 +70,9 @@ export class MessageHandler {
       userId: m.author.id,
       userName: m.member?.displayName ?? m.author.displayName ?? m.author.username,
       isAdmin: !!m.guild && isAdmin(this.d.cfg, m.author.id, m.member),
-      content: stripBotMention(m.content, this.botId),
+      content: flags.rest,
+      modelOverride: flags.model,
+      effortOverride: flags.effort,
       attachments: [...m.attachments.values()].map((a) => ({ name: a.name, url: a.url, size: a.size })),
       sourceMessage: m,
     };

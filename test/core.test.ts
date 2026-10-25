@@ -14,6 +14,7 @@ import { builtinTools, systemAppend } from '../src/agent.js';
 import { Semaphore } from '../src/semaphore.js';
 import { RunManager, type WorkItem } from '../src/discord/runs.js';
 import { askKey, askMenuCommand, translateMenuCommand } from '../src/discord/ask.js';
+import { effectiveEffort, parseRunFlags, shortModel } from '../src/flags.js';
 
 test('splitMessage keeps chunks under limit and balances code fences', () => {
   const code = '```ts\n' + Array.from({ length: 200 }, (_, i) => `const x${i} = ${i};`).join('\n') + '\n```';
@@ -287,4 +288,29 @@ test('store: per-channel model override', () => {
   assert.ok(s.setModel('c1', null, 'u1'));
   assert.equal(s.getChannel('c1')!.model, null);
   assert.equal(s.setModel('nope', 'x', 'u1'), false);
+});
+
+test('message flags: model and effort at the start only', () => {
+  assert.deepEqual(parseRunFlags('--sonnet --low summarise this'), { model: 'claude-sonnet-5-5', effort: 'low', rest: 'summarise this' });
+  assert.deepEqual(parseRunFlags('--HIGH fix it'), { effort: 'high', rest: 'fix it' });
+  assert.deepEqual(parseRunFlags('why does --opus appear here'), { rest: 'why does --opus appear here' });
+  assert.deepEqual(parseRunFlags('--verbose --opus x'), { rest: '--verbose --opus x' });
+  assert.deepEqual(parseRunFlags('--opus'), { model: 'claude-opus-5-5', rest: '' });
+  assert.deepEqual(parseRunFlags('--opus-ish hi'), { rest: '--opus-ish hi' });
+});
+
+test('effort: medium by default, Opus capped at high', () => {
+  assert.equal(effectiveEffort('claude-sonnet-5-5', undefined), 'medium');
+  assert.equal(effectiveEffort('claude-sonnet-5-5', null), 'medium');
+  assert.equal(effectiveEffort('claude-sonnet-5-5', 'max'), 'max');
+  assert.equal(effectiveEffort('claude-opus-5-5', 'max'), 'high');
+  assert.equal(effectiveEffort('claude-opus-5-5', 'xhigh'), 'high');
+  assert.equal(effectiveEffort('claude-opus-5-5', 'low'), 'low');
+  assert.equal(shortModel('claude-haiku-5-5'), 'haiku');
+});
+
+test('bundles: no per-task budget unless one is set', () => {
+  const f = parseBundlesFile({ bundles: { a: {}, b: { maxBudgetUsd: 5 } } });
+  assert.equal(f.bundles.a!.maxBudgetUsd, undefined);
+  assert.equal(f.bundles.b!.maxBudgetUsd, 5);
 });

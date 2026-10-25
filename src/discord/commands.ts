@@ -21,6 +21,7 @@ import { STOP_PREFIX, type RunManager } from './runs.js';
 import { ASK_MENU, AskHandler, TRANSLATE_MENU, askKey, askMenuCommand, translateMenuCommand } from './ask.js';
 import { hasAnyRole, isAdmin } from './util.js';
 import { truncate } from '../format.js';
+import { DEFAULT_EFFORT, effectiveEffort } from '../flags.js';
 import { log, errMsg } from '../log.js';
 
 export const command = new SlashCommandBuilder()
@@ -33,7 +34,25 @@ export const command = new SlashCommandBuilder()
       .addStringOption((o) =>
         o.setName('prompt').setDescription('e.g. What are they discussing? Translate the last few messages.').setRequired(true).setMaxLength(4000),
       )
-      .addBooleanOption((o) => o.setName('new').setDescription('Forget your earlier private questions here and start fresh')),
+      .addBooleanOption((o) => o.setName('new').setDescription('Forget your earlier private questions here and start fresh'))
+      .addStringOption((o) =>
+        o
+          .setName('model')
+          .setDescription("Model for this question (default: the channel's)")
+          .addChoices({ name: 'Opus', value: 'opus' }, { name: 'Sonnet', value: 'sonnet' }, { name: 'Haiku', value: 'haiku' }),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('effort')
+          .setDescription("How hard to think for this question (default: the channel's; Opus maxes out at high)")
+          .addChoices(
+            { name: 'Low', value: 'low' },
+            { name: 'Medium', value: 'medium' },
+            { name: 'High', value: 'high' },
+            { name: 'Extra high', value: 'xhigh' },
+            { name: 'Max', value: 'max' },
+          ),
+      ),
   )
   .addSubcommand((s) =>
     s
@@ -388,11 +407,15 @@ export class CommandHandler {
           await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
           return;
         }
-        const bundleEffort = bundles.get(store.getChannel(channelId)!.bundle)?.effort;
+        const row = store.getChannel(channelId)!;
+        const bundle = bundles.get(row.bundle);
+        const modelId = row.model ?? bundle?.model ?? cfg.CLAUDE_MODEL;
+        const used = effectiveEffort(modelId, effort ?? bundle?.effort);
+        const cap = effort && used !== effort ? ` On Opus that runs as **${used}**, its maximum here.` : '';
         await i.reply({
           content: effort
-            ? `🧠 Effort here is now **${effort}**. Applies to new work.`
-            : `🧠 Effort here now follows the bundle: **${bundleEffort ?? "the model's default"}**.`,
+            ? `🧠 Effort here is now **${effort}**. Applies to new work.${cap}`
+            : `🧠 Effort here now follows the bundle: **${bundle?.effort ?? `${DEFAULT_EFFORT} (default)`}**.`,
           ...EPHEMERAL,
         });
         return;
@@ -456,7 +479,7 @@ export class CommandHandler {
         const lines = bundles.names().map((n) => {
           const b = bundles.get(n)!;
           const mcp = Object.keys(b.mcpServers);
-          return `• **${n}**: ${b.description || '—'}\n  ${b.capabilities.join(', ')}${mcp.length ? ` · MCP: ${mcp.join(', ')}` : ''} · ≤${b.maxTurns} steps · ≤$${b.maxBudgetUsd}/task${
+          return `• **${n}**: ${b.description || '—'}\n  ${b.capabilities.join(', ')}${mcp.length ? ` · MCP: ${mcp.join(', ')}` : ''} · ≤${b.maxTurns} steps${b.maxBudgetUsd ? ` · ≤$${b.maxBudgetUsd}/task` : ''}${
             b.allowedRoleIds.length ? ' · role-restricted' : ''
           }`;
         });
@@ -492,9 +515,12 @@ export class CommandHandler {
       if (b.skills.length) lines.push(`**Skills:** ${b.skills === 'all' ? 'all' : b.skills.join(', ')}`);
       if (b.github) lines.push(`**Repos:** ${b.github.repos.join(', ') || 'any the token can reach'}`);
       const ch = i.guild ? store.getChannel(channelId) : undefined;
-      const effort = ch?.effort ? `${ch.effort} (this channel)` : b.effort ? `${b.effort} (bundle)` : 'model default';
+      const modelId = ch?.model ?? b.model ?? cfg.CLAUDE_MODEL;
+      const asked = ch?.effort ?? b.effort;
+      const used = effectiveEffort(modelId, asked);
+      const effort = `${used} (${ch?.effort ? 'this channel' : b.effort ? 'bundle' : 'default'}${asked && asked !== used ? `; ${asked} is capped at high on Opus` : ''})`;
       const model = ch?.model ? `${ch.model} (this channel)` : b.model ? `${b.model} (bundle)` : cfg.CLAUDE_MODEL;
-      lines.push(`**Model:** ${model} · **Effort:** ${effort} · **Limits:** ${b.maxTurns} steps, $${b.maxBudgetUsd}/task`);
+      lines.push(`**Model:** ${model} · **Effort:** ${effort} · **Limits:** ${b.maxTurns} steps${b.maxBudgetUsd ? `, $${b.maxBudgetUsd}/task` : ''}`);
     }
     lines.push(`**Credential:** ${AUTH_LABEL[auth.mode()]}`);
     const mem = store.listMemories('channel', channelId).length + (i.guild ? store.listMemories('guild', i.guild.id).length : 0);

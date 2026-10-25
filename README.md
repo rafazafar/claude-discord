@@ -44,7 +44,7 @@ Edit `config/bundles.json`. Capabilities:
 
 Also per bundle: `allowedRoleIds`, `model`, `effort`, `maxTurns`, `maxBudgetUsd`, `instructions`, `skills`.
 
-`effort` (`low`, `medium`, `high`, `xhigh` or `max`) sets how hard Claude thinks; higher is slower and costs more. Leave it out to use the model's default. Admins can override it per channel with `/claude effort`, and the model with `/claude model` (Opus, Sonnet or Haiku; `default` goes back to the bundle's). The file is re-read automatically when it changes.
+`effort` (`low`, `medium`, `high`, `xhigh` or `max`) sets how hard Claude thinks; higher is slower and costs more. Leave it out for `medium`. Opus runs at most at `high`: `xhigh` and `max` are lowered to `high` on Opus wherever they come from. `maxBudgetUsd` is an optional spend cap per task; by default there is none, so a big task isn't cut off midway (`maxTurns` still limits steps). Admins can override it per channel with `/claude effort`, and the model with `/claude model` (Opus, Sonnet or Haiku; `default` goes back to the bundle's). The file is re-read automatically when it changes.
 
 ### Skills
 
@@ -136,7 +136,11 @@ In a channel, an admin runs `/claude enable bundle:engineering`. Then anyone:
 @Claude summarise this channel's last week of discussion
 @Claude every Monday at 9am, post a summary of open PRs in your-org/your-repo
 @Claude from now on, answer in Japanese in this channel
+@Claude --sonnet --low summarise today's discussion
+@Claude --opus --high why does the payment webhook double-charge?
 ```
+
+Flags at the start of a message pick the model (`--opus`, `--sonnet`, `--haiku`) and effort (`--low`, `--medium`, `--high`, `--xhigh`, `--max`) for that one run, over the channel's settings. Anyone can use them; Opus still caps at `high`. The progress message shows what's in use (`⏳ Working on it… · sonnet · low`). `/claude ask` has the same choices as `model` and `effort` options.
 
 Commands: `/claude ask · status · enable · disable · reply · threads · model · effort · stop · reset · memory … · schedule … · auth · usage · bundles`.
 

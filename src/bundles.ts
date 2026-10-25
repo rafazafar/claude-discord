@@ -51,7 +51,8 @@ export const BundleSchema = z.object({
   /** Default effort for channels on this bundle; admins can override per channel with /claude effort. */
   effort: Effort.optional(),
   maxTurns: z.number().int().positive().default(80),
-  maxBudgetUsd: z.number().positive().default(3),
+  /** Optional spend cap per task. Unset (the default): no cap, so one big task isn't cut off midway. */
+  maxBudgetUsd: z.number().positive().optional(),
   /** Extra standing instructions for every session on this bundle. */
   instructions: z.string().default(''),
   /** Skills from config/plugin/skills Claude may use here, by directory name, or "all". Needs `code`. */

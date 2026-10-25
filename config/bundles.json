@@ -3,15 +3,13 @@
     "general": {
       "description": "Q&A, research and summaries. Web only.",
       "capabilities": ["web"],
-      "maxTurns": 40,
-      "maxBudgetUsd": 1
+      "maxTurns": 40
     },
     "analysis": {
       "description": "Web + a sandboxed shell for analysing files and data people upload.",
       "capabilities": ["web", "code"],
       "skills": ["project-estimation"],
-      "maxTurns": 80,
-      "maxBudgetUsd": 3
+      "maxTurns": 80
     },
     "engineering": {
       "description": "Works on our GitHub repos: fixes bugs, opens PRs.",
@@ -26,7 +24,6 @@
       "skills": ["project-estimation"],
       "allowedRoleIds": [],
       "maxTurns": 150,
-      "maxBudgetUsd": 8,
       "instructions": "Run the test suite before opening a PR. Keep PRs small and describe how you verified the change."
     },
     "ops-example-with-mcp": {
@@ -39,8 +36,7 @@
           "headers": { "Authorization": "Bearer ${LINEAR_API_KEY}" }
         }
       },
-      "maxTurns": 60,
-      "maxBudgetUsd": 2
+      "maxTurns": 60
     }
   },
   "dm": {
