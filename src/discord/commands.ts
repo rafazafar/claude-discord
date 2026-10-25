@@ -18,7 +18,7 @@ import type { Scheduler } from '../scheduler.js';
 import { builtinTools } from '../agent.js';
 import { validateCron } from '../tools.js';
 import { STOP_PREFIX, type RunManager } from './runs.js';
-import { ASK_MENU, AskHandler, askKey, askMenuCommand } from './ask.js';
+import { ASK_MENU, AskHandler, TRANSLATE_MENU, askKey, askMenuCommand, translateMenuCommand } from './ask.js';
 import { hasAnyRole, isAdmin } from './util.js';
 import { truncate } from '../format.js';
 import { log, errMsg } from '../log.js';
@@ -177,7 +177,7 @@ export const command = new SlashCommandBuilder()
 
 export async function registerCommands(cfg: Config): Promise<void> {
   const rest = new REST({ version: '10' }).setToken(cfg.DISCORD_TOKEN);
-  const body = [command.toJSON(), askMenuCommand.toJSON()];
+  const body = [command.toJSON(), askMenuCommand.toJSON(), translateMenuCommand.toJSON()];
   if (cfg.DEV_GUILD_ID) {
     await rest.put(Routes.applicationGuildCommands(cfg.DISCORD_APP_ID, cfg.DEV_GUILD_ID), { body });
     log.info('registered guild commands', { guild: cfg.DEV_GUILD_ID });
@@ -210,7 +210,7 @@ export class CommandHandler {
     try {
       if (i.isAutocomplete()) return await this.autocomplete(i);
       if (i.isButton() && i.customId.startsWith(STOP_PREFIX)) return await this.stopButton(i);
-      if (i.isMessageContextMenuCommand() && i.commandName === ASK_MENU) return await this.ask.menu(i);
+      if (i.isMessageContextMenuCommand() && (i.commandName === ASK_MENU || i.commandName === TRANSLATE_MENU)) return await this.ask.menu(i);
       if (i.isModalSubmit() && this.ask.isModal(i.customId)) return await this.ask.modal(i);
       if (i.isChatInputCommand() && i.commandName === 'claude') return await this.command(i);
     } catch (e) {

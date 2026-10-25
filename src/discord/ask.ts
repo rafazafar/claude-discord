@@ -23,12 +23,17 @@ import { fetchLines, fetchMessages, formatMessageLine, hasAnyRole, isAdmin, work
 import { log, errMsg } from '../log.js';
 
 /**
- * Private questions: /claude ask and the "Ask Claude privately" message menu entry.
+ * Private questions: /claude ask and the "Ask Claude privately" and "Translate from here"
+ * message menu entries.
  * Discord shows the command, the prompt and the answer only to the asker. Each person
  * gets one private session per channel, so follow-up questions keep their context.
  */
 
 export const ASK_MENU = 'Ask Claude privately';
+export const TRANSLATE_MENU = 'Translate from here';
+/** The question "Translate from here" asks; the asker's Discord language decides the target. */
+export const TRANSLATE_PROMPT =
+  "Translate the conversation from the message I selected up to now into my language. Start with a one-line gist. Then give the translation, merging consecutive messages from the same person into one line with their name. End with short notes on tone, politeness or implied meaning, only where it changes what was meant. Skip messages already in my language unless they're needed to follow along.";
 const MODAL_PREFIX = 'claude-ask:';
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** Discord lets a bot edit an interaction's replies for 15 minutes; after that the answer goes by DM. */
@@ -39,6 +44,11 @@ const BEFORE_ANCHOR = 10;
 
 export const askMenuCommand = new ContextMenuCommandBuilder()
   .setName(ASK_MENU)
+  .setType(ApplicationCommandType.Message)
+  .setContexts(InteractionContextType.Guild);
+
+export const translateMenuCommand = new ContextMenuCommandBuilder()
+  .setName(TRANSLATE_MENU)
   .setType(ApplicationCommandType.Message)
   .setContexts(InteractionContextType.Guild);
 
@@ -53,7 +63,7 @@ export interface AskDeps {
   runs: RunManager;
 }
 
-type AskInteraction = ChatInputCommandInteraction | ModalSubmitInteraction;
+type AskInteraction = ChatInputCommandInteraction | ModalSubmitInteraction | MessageContextMenuCommandInteraction;
 
 export class AskHandler {
   /** Newest channel message each private session has already seen, so follow-ups only add what's new. */
@@ -65,8 +75,16 @@ export class AskHandler {
     await this.run(i, i.options.getString('prompt', true), { fresh: i.options.getBoolean('new') ?? false });
   }
 
-  /** Right-click a message → Apps → Ask Claude privately: ask about the conversation from there. */
+  /**
+   * Right-click a message → Apps. "Translate from here" answers straight away; "Ask Claude
+   * privately" first asks what you want to know. Both read the conversation from that message on,
+   * in the same private session as /claude ask, so a follow-up ask continues from the answer.
+   */
   async menu(i: MessageContextMenuCommandInteraction) {
+    if (i.commandName === TRANSLATE_MENU) {
+      await this.run(i, TRANSLATE_PROMPT, { fresh: false, anchorId: i.targetId });
+      return;
+    }
     const input = new TextInputBuilder()
       .setCustomId('prompt')
       .setLabel('What do you want to know?')

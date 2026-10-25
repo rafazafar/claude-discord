@@ -13,7 +13,7 @@ import { parseDecision } from '../src/ambient.js';
 import { builtinTools, systemAppend } from '../src/agent.js';
 import { Semaphore } from '../src/semaphore.js';
 import { RunManager, type WorkItem } from '../src/discord/runs.js';
-import { askKey } from '../src/discord/ask.js';
+import { askKey, askMenuCommand, translateMenuCommand } from '../src/discord/ask.js';
 
 test('splitMessage keeps chunks under limit and balances code fences', () => {
   const code = '```ts\n' + Array.from({ length: 200 }, (_, i) => `const x${i} = ${i};`).join('\n') + '\n```';
@@ -265,4 +265,14 @@ test('private asks: own key per person and channel, and a prompt that says only 
   assert.match(prompt, /en-US/);
   assert.match(prompt, /Tanaka: 木曜日にずらせますか/);
   assert.doesNotMatch(runs.buildPrompt([{ ...item, trigger: 'mention' } as WorkItem], []), /Only the asker/);
+});
+
+test('message menu entries are distinct guild-only message commands', () => {
+  const ask = askMenuCommand.toJSON();
+  const tr = translateMenuCommand.toJSON();
+  assert.notEqual(ask.name, tr.name);
+  for (const c of [ask, tr]) {
+    assert.equal(c.type, 3);
+    assert.deepEqual(c.contexts, [0]);
+  }
 });
