@@ -44,7 +44,7 @@ Edit `config/bundles.json`. Capabilities:
 
 Also per bundle: `allowedRoleIds`, `model`, `effort`, `maxTurns`, `maxBudgetUsd`, `instructions`, `skills`.
 
-`effort` (`low`, `medium`, `high`, `xhigh` or `max`) sets how hard Claude thinks; higher is slower and costs more. Leave it out to use the model's default. Admins can override it per channel with `/claude effort`. The file is re-read automatically when it changes.
+`effort` (`low`, `medium`, `high`, `xhigh` or `max`) sets how hard Claude thinks; higher is slower and costs more. Leave it out to use the model's default. Admins can override it per channel with `/claude effort`, and the model with `/claude model` (Opus, Sonnet or Haiku; `default` goes back to the bundle's). The file is re-read automatically when it changes.
 
 ### Skills
 
@@ -138,7 +138,7 @@ In a channel, an admin runs `/claude enable bundle:engineering`. Then anyone:
 @Claude from now on, answer in Japanese in this channel
 ```
 
-Commands: `/claude ask · status · enable · disable · reply · threads · effort · stop · reset · memory … · schedule … · auth · usage · bundles`.
+Commands: `/claude ask · status · enable · disable · reply · threads · model · effort · stop · reset · memory … · schedule … · auth · usage · bundles`.
 
 ## Security notes
 

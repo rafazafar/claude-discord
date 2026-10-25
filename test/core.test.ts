@@ -212,6 +212,7 @@ test('store: adds the threads column to databases from before it existed', () =>
   const s = new Store(file);
   assert.equal(s.getChannel('c1')!.threads, 0);
   assert.equal(s.getChannel('c1')!.effort, null);
+  assert.equal(s.getChannel('c1')!.model, null);
   s.db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -275,4 +276,15 @@ test('message menu entries are distinct guild-only message commands', () => {
     assert.equal(c.type, 3);
     assert.deepEqual(c.contexts, [0]);
   }
+});
+
+test('store: per-channel model override', () => {
+  const s = new Store(':memory:');
+  s.enableChannel('c1', 'g1', 'a', 'u1');
+  assert.equal(s.getChannel('c1')!.model, null);
+  assert.ok(s.setModel('c1', 'claude-sonnet-5-5', 'u1'));
+  assert.equal(s.getChannel('c1')!.model, 'claude-sonnet-5-5');
+  assert.ok(s.setModel('c1', null, 'u1'));
+  assert.equal(s.getChannel('c1')!.model, null);
+  assert.equal(s.setModel('nope', 'x', 'u1'), false);
 });

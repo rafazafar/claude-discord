@@ -69,6 +69,23 @@ export const command = new SlashCommandBuilder()
   )
   .addSubcommand((s) =>
     s
+      .setName('model')
+      .setDescription('Admin: which Claude model works in this channel (bigger is better and costs more)')
+      .addStringOption((o) =>
+        o
+          .setName('name')
+          .setDescription("Model, or default to use the bundle's")
+          .setRequired(true)
+          .addChoices(
+            { name: 'Opus 5.5: most capable', value: 'claude-opus-5-5' },
+            { name: 'Sonnet 5.5: balanced', value: 'claude-sonnet-5-5' },
+            { name: 'Haiku 5.5: fastest and cheapest', value: 'claude-haiku-5-5' },
+            { name: "Default: use the bundle's model", value: 'default' },
+          ),
+      ),
+  )
+  .addSubcommand((s) =>
+    s
       .setName('effort')
       .setDescription('Admin: how hard Claude thinks in this channel (higher is slower and costs more)')
       .addStringOption((o) =>
@@ -341,6 +358,22 @@ export class CommandHandler {
         );
         return;
       }
+      case 'model': {
+        if (!(await needGuild()) || !(await needAdmin())) return;
+        const name = i.options.getString('name', true);
+        const model = name === 'default' ? null : name;
+        if (!store.setModel(channelId, model, i.user.id)) {
+          await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
+          return;
+        }
+        const bundleModel = bundles.get(store.getChannel(channelId)!.bundle)?.model ?? cfg.CLAUDE_MODEL;
+        await i.reply(
+          model
+            ? `🤖 Claude now uses **${model}** in this channel. Applies to new work.`
+            : `🤖 This channel now uses the bundle's model: **${bundleModel}**.`,
+        );
+        return;
+      }
       case 'effort': {
         if (!(await needGuild()) || !(await needAdmin())) return;
         const level = i.options.getString('level', true);
@@ -453,7 +486,8 @@ export class CommandHandler {
       if (b.github) lines.push(`**Repos:** ${b.github.repos.join(', ') || 'any the token can reach'}`);
       const ch = i.guild ? store.getChannel(channelId) : undefined;
       const effort = ch?.effort ? `${ch.effort} (this channel)` : b.effort ? `${b.effort} (bundle)` : 'model default';
-      lines.push(`**Model:** ${b.model ?? cfg.CLAUDE_MODEL} · **Effort:** ${effort} · **Limits:** ${b.maxTurns} steps, $${b.maxBudgetUsd}/task`);
+      const model = ch?.model ? `${ch.model} (this channel)` : b.model ? `${b.model} (bundle)` : cfg.CLAUDE_MODEL;
+      lines.push(`**Model:** ${model} · **Effort:** ${effort} · **Limits:** ${b.maxTurns} steps, $${b.maxBudgetUsd}/task`);
     }
     lines.push(`**Credential:** ${AUTH_LABEL[auth.mode()]}`);
     const mem = store.listMemories('channel', channelId).length + (i.guild ? store.listMemories('guild', i.guild.id).length : 0);

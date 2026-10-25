@@ -15,6 +15,8 @@ export interface ChannelRow {
   threads: number;
   /** Overrides the bundle's effort in this channel; null uses the bundle's. */
   effort: Effort | null;
+  /** Overrides the bundle's model in this channel; null uses the bundle's. */
+  model: string | null;
   updated_by: string | null;
   updated_at: number;
 }
@@ -77,6 +79,7 @@ CREATE TABLE IF NOT EXISTS channels (
   reply_mode TEXT NOT NULL DEFAULT 'mention',
   threads    INTEGER NOT NULL DEFAULT 0,
   effort     TEXT,
+  model      TEXT,
   updated_by TEXT,
   updated_at INTEGER NOT NULL
 );
@@ -170,6 +173,7 @@ export class Store {
     const cols = (this.db.prepare('PRAGMA table_info(channels)').all() as Array<{ name: string }>).map((c) => c.name);
     if (!cols.includes('threads')) this.db.exec('ALTER TABLE channels ADD COLUMN threads INTEGER NOT NULL DEFAULT 0');
     if (!cols.includes('effort')) this.db.exec('ALTER TABLE channels ADD COLUMN effort TEXT');
+    if (!cols.includes('model')) this.db.exec('ALTER TABLE channels ADD COLUMN model TEXT');
   }
 
   // ---- channels -------------------------------------------------------------
@@ -213,6 +217,14 @@ export class Store {
       this.db
         .prepare('UPDATE channels SET effort = ?, updated_by = ?, updated_at = ? WHERE channel_id = ?')
         .run(effort, by, Date.now(), channelId).changes > 0
+    );
+  }
+
+  setModel(channelId: string, model: string | null, by: string): boolean {
+    return (
+      this.db
+        .prepare('UPDATE channels SET model = ?, updated_by = ?, updated_at = ? WHERE channel_id = ?')
+        .run(model, by, Date.now(), channelId).changes > 0
     );
   }
 

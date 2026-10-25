@@ -384,6 +384,8 @@ export class RunManager {
     const prevCost = thread.session_cost;
     let runId: number | null = null;
     let result: RunResult;
+    // Per-channel overrides set with /claude model and /claude effort.
+    const channelRow = store.getChannel(first.configChannelId);
 
     try {
       runId = store.startRun({
@@ -400,8 +402,8 @@ export class RunManager {
           bundle,
           sessionId: thread.session_id,
           cwd: thread.cwd,
-          model: bundle.model ?? cfg.CLAUDE_MODEL,
-          effort: store.getChannel(first.configChannelId)?.effort ?? bundle.effort,
+          model: channelRow?.model ?? bundle.model ?? cfg.CLAUDE_MODEL,
+          effort: channelRow?.effort ?? bundle.effort,
           context: {
             guildName: first.guildName,
             channelName: first.configChannelName,
