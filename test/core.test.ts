@@ -317,3 +317,8 @@ test('bundles: no per-task budget unless one is set', () => {
   assert.equal(f.bundles.a!.maxBudgetUsd, undefined);
   assert.equal(f.bundles.b!.maxBudgetUsd, 5);
 });
+
+test('slash command is /zclaude', async () => {
+  const { buildCommand } = await import('../src/discord/commands.js');
+  assert.equal(buildCommand('zClaude').toJSON().name, 'zclaude');
+});

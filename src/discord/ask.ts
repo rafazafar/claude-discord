@@ -27,7 +27,7 @@ import { MODEL_ALIASES } from '../flags.js';
 import type { Effort } from '../bundles.js';
 
 /**
- * Private questions: /claude ask and the "Ask Claude privately" and "Translate from here"
+ * Private questions: /zclaude ask and the "Ask Claude privately" and "Translate from here"
  * message menu entries.
  * Discord shows the command, the prompt and the answer only to the asker. Each person
  * gets one private session per channel, so follow-up questions keep their context.
@@ -93,7 +93,7 @@ export class AskHandler {
   /**
    * Right-click a message → Apps. "Translate from here" answers straight away; "Ask Claude
    * privately" first asks what you want to know. Both read the conversation from that message on,
-   * in the same private session as /claude ask, so a follow-up ask continues from the answer.
+   * in the same private session as /zclaude ask, so a follow-up ask continues from the answer.
    */
   async menu(i: MessageContextMenuCommandInteraction) {
     if (i.commandName === TRANSLATE_MENU) {
@@ -134,7 +134,7 @@ export class AskHandler {
     const ch = configChannelId ? store.getChannel(configChannelId) : undefined;
     const bundle = ch ? bundles.get(ch.bundle) : undefined;
     if (!ch || !bundle) {
-      await i.reply({ content: `${botName(this.d.client)} isn't set up in this channel. An admin can run \`/claude enable\` here.`, ...EPHEMERAL });
+      await i.reply({ content: `${botName(this.d.client)} isn't set up in this channel. An admin can run \`/zclaude enable\` here.`, ...EPHEMERAL });
       return;
     }
     const admin = isAdmin(cfg, i.user.id, i.member);
@@ -144,7 +144,7 @@ export class AskHandler {
     }
     const key = askKey(channel.id, i.user.id);
     if (runs.isBusy(key)) {
-      await i.reply({ content: "I'm still answering your last question here. Wait for it, or stop it with `/claude stop`.", ...EPHEMERAL });
+      await i.reply({ content: "I'm still answering your last question here. Wait for it, or stop it with `/zclaude stop`.", ...EPHEMERAL });
       return;
     }
     await i.deferReply(EPHEMERAL);

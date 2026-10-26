@@ -1,6 +1,6 @@
 # zClaude for Discord
 
-The bot goes by **zClaude** (it runs on Anthropic's Claude). Its replies, the right-click entries and the way it introduces itself use the bot's name in Discord, so renaming the bot in the Developer Portal is enough to change them; the slash command stays `/claude`.
+The bot goes by **zClaude** (it runs on Anthropic's Claude). Its replies, the right-click entries and the way it introduces itself use the bot's name in Discord, so renaming the bot in the Developer Portal is enough to change them; the slash command is `/zclaude`.
 
 A Claude Tag–style teammate for Discord, built on the [Claude Agent SDK](https://docs.claude.com/en/docs/agent-sdk/overview). Tag `@zClaude` in a channel and it works through the task with the tools its channel allows, then replies right there. Reply to its message to keep going, or start a thread yourself and tag it there. Channels can opt in to a thread per task instead.
 
@@ -9,15 +9,15 @@ A Claude Tag–style teammate for Discord, built on the [Claude Agent SDK](https
 | Claude Tag feature | Here |
 |---|---|
 | Tag `@zClaude` to hand off work | Mention → live progress with a **Stop** button → result, posted as a reply in the channel. Using Discord's **Reply** on any of Claude's messages continues that conversation; a new tag starts a fresh one (with recent channel messages as context). Messages sent mid-run are batched into the next turn. |
-| Threads | Start a thread yourself and tag Claude in it: it joins, and follow-ups there go to Claude without re-tagging. `/claude threads mode:on` makes Claude open a thread for every task in that channel instead. |
-| Access bundles per channel | `config/bundles.json` defines bundles (web, code, GitHub, MCP servers, role limits, step/budget caps). Admins attach one per channel with `/claude enable`. |
-| Channel memory | "From now on…" instructions are saved per channel or server and fed into every session. Manage with `/claude memory`. |
-| Ambient behaviour | `/claude reply mode:ambient` lets Claude jump in when a small model judges it can clearly help. Rate-limited per channel. |
+| Threads | Start a thread yourself and tag Claude in it: it joins, and follow-ups there go to Claude without re-tagging. `/zclaude threads mode:on` makes Claude open a thread for every task in that channel instead. |
+| Access bundles per channel | `config/bundles.json` defines bundles (web, code, GitHub, MCP servers, role limits, step/budget caps). Admins attach one per channel with `/zclaude enable`. |
+| Channel memory | "From now on…" instructions are saved per channel or server and fed into every session. Manage with `/zclaude memory`. |
+| Ambient behaviour | `/zclaude reply mode:ambient` lets Claude jump in when a small model judges it can clearly help. Rate-limited per channel. |
 | Standing scheduled work | "Every weekday at 9am, summarise yesterday" → a cron schedule that posts each run in the channel (or in a fresh thread when threads are on) (text and announcement channels; not forums). |
-| Private questions | `/claude ask` asks Claude about the channel so only you see it: the command, your prompt and the answer are hidden from everyone else. Or right-click a message → **Apps** → **Ask zClaude privately** to ask about the conversation from that message on (e.g. "what are they saying? translate and explain the tone"). **Translate from here** (same menu) skips the question and privately translates the conversation from that message on into your Discord language, with a gist and notes on tone. Follow-up asks in the same channel continue your private session; `new:true` starts over. |
-| Quieting | "Stop replying here" → quiet thread or reply chain; `/claude reply mode:mention` → mention-only. |
+| Private questions | `/zclaude ask` asks Claude about the channel so only you see it: the command, your prompt and the answer are hidden from everyone else. Or right-click a message → **Apps** → **Ask zClaude privately** to ask about the conversation from that message on (e.g. "what are they saying? translate and explain the tone"). **Translate from here** (same menu) skips the question and privately translates the conversation from that message on into your Discord language, with a gist and notes on tone. Follow-up asks in the same channel continue your private session; `new:true` starts over. |
+| Quieting | "Stop replying here" → quiet thread or reply chain; `/zclaude reply mode:mention` → mention-only. |
 | DMs | Optional (off by default), on their own bundle. |
-| Switchable credential | API key or Claude plan sign-in; flip live with `/claude auth`. |
+| Switchable credential | API key or Claude plan sign-in; flip live with `/zclaude auth`. |
 
 ## 1. Create the Discord app
 
@@ -33,7 +33,7 @@ Set one or both in the environment:
 - **`ANTHROPIC_API_KEY`** (default). Pay-as-you-go, **or your Max/Team plan's monthly API credits**: claim them in claude.ai billing settings into a linked Claude Console org, then create the key in that org. Requests stop when credits run out unless the org has purchased credits or auto-reload.
 - **`CLAUDE_CODE_OAUTH_TOKEN`**. Run `claude setup-token` and paste the token. Uses your plan's own usage limits, not the monthly credits. It's tied to one person's account, so check Anthropic's terms before running a shared server on it.
 
-With both set, admins switch at any time with `/claude auth` (persists across restarts; `default` returns to `AUTH_MODE`). The agent only ever receives one credential, so it's always clear which pool pays.
+With both set, admins switch at any time with `/zclaude auth` (persists across restarts; `default` returns to `AUTH_MODE`). The agent only ever receives one credential, so it's always clear which pool pays.
 
 ## 3. Configure access bundles
 
@@ -46,7 +46,7 @@ Edit `config/bundles.json`. Capabilities:
 
 Also per bundle: `allowedRoleIds`, `model`, `effort`, `maxTurns`, `maxBudgetUsd`, `instructions`, `skills`.
 
-`effort` (`low`, `medium`, `high`, `xhigh` or `max`) sets how hard Claude thinks; higher is slower and costs more. Leave it out for `medium`. Opus runs at most at `high`: `xhigh` and `max` are lowered to `high` on Opus wherever they come from. `maxBudgetUsd` is an optional spend cap per task; by default there is none, so a big task isn't cut off midway (`maxTurns` still limits steps). Admins can override it per channel with `/claude effort`, and the model with `/claude model` (Opus, Sonnet or Haiku; `default` goes back to the bundle's). The file is re-read automatically when it changes.
+`effort` (`low`, `medium`, `high`, `xhigh` or `max`) sets how hard Claude thinks; higher is slower and costs more. Leave it out for `medium`. Opus runs at most at `high`: `xhigh` and `max` are lowered to `high` on Opus wherever they come from. `maxBudgetUsd` is an optional spend cap per task; by default there is none, so a big task isn't cut off midway (`maxTurns` still limits steps). Admins can override it per channel with `/zclaude effort`, and the model with `/zclaude model` (Opus, Sonnet or Haiku; `default` goes back to the bundle's). The file is re-read automatically when it changes.
 
 ### Skills
 
@@ -90,7 +90,7 @@ To add one, put its folder under `config/plugin/skills/`, add its name to a bund
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `AUTH_MODE` | `api_key` if `ANTHROPIC_API_KEY` is set, else `oauth_token` | Which credential to use when both are set. Admins can override live with `/claude auth`. |
+| `AUTH_MODE` | `api_key` if `ANTHROPIC_API_KEY` is set, else `oauth_token` | Which credential to use when both are set. Admins can override live with `/zclaude auth`. |
 | `CLAUDE_MODEL` | `claude-opus-5-5` | Model for working sessions (a bundle's `model` overrides it). |
 | `AMBIENT_MODEL` | `claude-haiku-5-5` | Small model that decides whether to jump in during ambient mode. |
 | `ADMIN_ROLE_IDS` | – | Comma-separated role IDs allowed to run admin commands, besides anyone with Manage Server. |
@@ -129,9 +129,9 @@ To change bundles without rebuilding, uncomment the bind mount in `docker-compos
 
 ## 5. Use it
 
-Once the deploy is running, the bot you invited in step 1 shows as **online** in your server, and typing `/claude` lists its commands. If it's still offline, check the Dokploy logs. If it isn't in the member list at all, go back to step 1.4 and invite it.
+Once the deploy is running, the bot you invited in step 1 shows as **online** in your server, and typing `/zclaude` lists its commands. If it's still offline, check the Dokploy logs. If it isn't in the member list at all, go back to step 1.4 and invite it.
 
-In a channel, an admin runs `/claude enable bundle:engineering`. Then anyone:
+In a channel, an admin runs `/zclaude enable bundle:engineering`. Then anyone:
 
 ```
 @zClaude the signup form 500s when the email has a plus sign — find it and open a PR
@@ -142,9 +142,9 @@ In a channel, an admin runs `/claude enable bundle:engineering`. Then anyone:
 @zClaude --opus --high why does the payment webhook double-charge?
 ```
 
-Flags at the start of a message pick the model (`--opus`, `--sonnet`, `--haiku`) and effort (`--low`, `--medium`, `--high`, `--xhigh`, `--max`) for that one run, over the channel's settings. Anyone can use them; Opus still caps at `high`. The progress message shows what's in use (`⏳ Working on it… · sonnet · low`). `/claude ask` has the same choices as `model` and `effort` options.
+Flags at the start of a message pick the model (`--opus`, `--sonnet`, `--haiku`) and effort (`--low`, `--medium`, `--high`, `--xhigh`, `--max`) for that one run, over the channel's settings. Anyone can use them; Opus still caps at `high`. The progress message shows what's in use (`⏳ Working on it… · sonnet · low`). `/zclaude ask` has the same choices as `model` and `effort` options.
 
-Commands: `/claude ask · status · enable · disable · reply · threads · model · effort · stop · reset · memory … · schedule … · auth · usage · bundles`.
+Commands: `/zclaude ask · status · enable · disable · reply · threads · model · effort · stop · reset · memory … · schedule … · auth · usage · bundles`.
 
 ## Security notes
 

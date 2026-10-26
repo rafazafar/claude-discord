@@ -20,7 +20,7 @@ const EnvSchema = z.object({
    *                 when the key comes from the Console org linked to your plan)
    *  - oauth_token: CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token` (draws on plan usage limits)
    * Unset: api_key if ANTHROPIC_API_KEY is present, otherwise oauth_token.
-   * Admins can switch at runtime with /claude auth when both are configured.
+   * Admins can switch at runtime with /zclaude auth when both are configured.
    */
   AUTH_MODE: z.enum(['api_key', 'oauth_token']).optional(),
   ANTHROPIC_API_KEY: z.string().optional(),

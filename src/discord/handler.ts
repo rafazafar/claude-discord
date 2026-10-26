@@ -30,7 +30,7 @@ export interface HandlerDeps {
 }
 
 const NOT_ENABLED =
-  "I'm not set up in this channel yet. Someone with **Manage Server** can run `/claude enable` here to choose what I can access.";
+  "I'm not set up in this channel yet. Someone with **Manage Server** can run `/zclaude enable` here to choose what I can access.";
 
 export class MessageHandler {
   private readonly lastAmbientCheck = new Map<string, number>();
@@ -188,7 +188,7 @@ export class MessageHandler {
     if (chain?.quiet && !mentioned) return;
     const bundle = this.d.bundles.get(ch.bundle);
     if (!bundle) {
-      await this.deny(m, `My access bundle "${ch.bundle}" is missing. An admin can run \`/claude enable\` again.`);
+      await this.deny(m, `My access bundle "${ch.bundle}" is missing. An admin can run \`/zclaude enable\` again.`);
       return;
     }
     if (!hasAnyRole(m.member, bundle.allowedRoleIds)) {

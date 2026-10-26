@@ -5,7 +5,7 @@ import { log, errMsg } from './log.js';
 
 /**
  * Access bundles: named sets of capabilities, credentials and limits.
- * Admins attach one bundle to each channel with `/claude enable bundle:<name>`.
+ * Admins attach one bundle to each channel with `/zclaude enable bundle:<name>`.
  * Mirrors Claude Tag's "Access bundles": Claude starts with no access, and you
  * decide per channel what it can reach.
  */
@@ -48,7 +48,7 @@ export const BundleSchema = z.object({
   /** If non-empty, only members with one of these roles can hand Claude work in channels on this bundle. */
   allowedRoleIds: z.array(z.string()).default([]),
   model: z.string().optional(),
-  /** Default effort for channels on this bundle; admins can override per channel with /claude effort. */
+  /** Default effort for channels on this bundle; admins can override per channel with /zclaude effort. */
   effort: Effort.optional(),
   maxTurns: z.number().int().positive().default(80),
   /** Optional spend cap per task. Unset (the default): no cap, so one big task isn't cut off midway. */

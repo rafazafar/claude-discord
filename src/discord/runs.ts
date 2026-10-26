@@ -24,7 +24,7 @@ import type { Effort } from '../bundles.js';
 
 export type Trigger = 'mention' | 'thread' | 'dm' | 'ambient' | 'schedule' | 'private';
 
-/** Delivers part of a private answer (/claude ask): visible only to the asker. */
+/** Delivers part of a private answer (/zclaude ask): visible only to the asker. */
 export type PrivateReply = (payload: { content?: string; files?: AttachmentBuilder[] }) => Promise<void>;
 
 export interface WorkAttachment {
@@ -58,7 +58,7 @@ export interface WorkItem {
    * message it posts is linked so replying to it continues this conversation.
    */
   inline?: boolean;
-  /** Set for /claude ask: everything goes here instead of the channel, with no progress message. */
+  /** Set for /zclaude ask: everything goes here instead of the channel, with no progress message. */
   privateReply?: PrivateReply;
   /** The asker's Discord language (private questions). */
   locale?: string;
@@ -318,7 +318,7 @@ export class RunManager {
     if (first.trigger === 'private') {
       ctx.push(
         '',
-        'This is a private question asked with /claude ask. Only the asker sees your answer; nobody else in the channel knows they asked.',
+        'This is a private question asked with /zclaude ask. Only the asker sees your answer; nobody else in the channel knows they asked.',
         'The earlier conversation is what they are asking about. They may not read its language well: when they ask what people said, translate and explain it, including tone and anything implied.',
         `Answer in the language of their question${first.locale ? ` (their Discord language is ${first.locale})` : ''}. Keep it short unless they ask for detail.`,
       );
@@ -338,7 +338,7 @@ export class RunManager {
     if (!thread) throw new Error('conversation not registered');
     const bundle = bundles.get(first.bundleName);
     if (!bundle) {
-      const content = `⚠️ Access bundle "${first.bundleName}" no longer exists. An admin can fix this with \`/claude enable\`.`;
+      const content = `⚠️ Access bundle "${first.bundleName}" no longer exists. An admin can fix this with \`/zclaude enable\`.`;
       if (first.privateReply) await first.privateReply({ content });
       else await (await first.getChannel()).send(content);
       return;
@@ -352,7 +352,7 @@ export class RunManager {
 
     const lazy = first.trigger === 'ambient';
     const priv = first.privateReply;
-    // Message flags win, then /claude model and /claude effort for the channel, then the bundle.
+    // Message flags win, then /zclaude model and /zclaude effort for the channel, then the bundle.
     const channelRow = store.getChannel(first.configChannelId);
     const flagged = [...items].reverse();
     const model = flagged.find((i) => i.modelOverride)?.modelOverride ?? channelRow?.model ?? bundle.model ?? cfg.CLAUDE_MODEL;
@@ -478,7 +478,7 @@ export class RunManager {
     }
 
     const footer = `· ${elapsed} · ${steps} step${steps === 1 ? '' : 's'}${cost}`;
-    const more = priv ? 'Ask again with `/claude ask` to keep going.' : 'Reply "continue" to keep going.';
+    const more = priv ? 'Ask again with `/zclaude ask` to keep going.' : 'Reply "continue" to keep going.';
     let line: string;
     switch (result.status) {
       case 'success':

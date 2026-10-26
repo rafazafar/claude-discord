@@ -192,7 +192,7 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   billing_error:
     'The Claude account is out of credits. If you use plan monthly credits, they refresh next billing cycle; otherwise add credits or enable auto-reload in the Claude Console.',
   authentication_failed: "Anthropic rejected the bot's credential. An admin should check the API key or plan token.",
-  oauth_org_not_allowed: 'This Claude plan sign-in is not allowed for this use. Switch to an API key with /claude auth.',
+  oauth_org_not_allowed: 'This Claude plan sign-in is not allowed for this use. Switch to an API key with /zclaude auth.',
   rate_limit: 'Hit a Claude rate or usage limit. Try again in a bit.',
   overloaded: "Anthropic's API is overloaded right now. Try again shortly.",
   model_not_found: "The configured model was not found. Check CLAUDE_MODEL or the bundle's model.",

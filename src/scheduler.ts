@@ -58,7 +58,7 @@ export class Scheduler {
     return this.jobs.get(id)?.cron.nextRun() ?? null;
   }
 
-  /** Runs a schedule now (also used by /claude schedule run). */
+  /** Runs a schedule now (also used by /zclaude schedule run). */
   async fire(id: number): Promise<void> {
     const row = this.store.getSchedule(id);
     if (!row || !row.enabled) return;

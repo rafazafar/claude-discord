@@ -30,7 +30,7 @@ export interface ToolContext {
   onSchedulesChanged: () => void;
   /** Called after the thread is asked to go quiet. */
   onQuietThread: () => void;
-  /** A private /claude ask: only tools that change nothing others would see. */
+  /** A private /zclaude ask: only tools that change nothing others would see. */
   privateAsk?: boolean;
 }
 
@@ -67,9 +67,9 @@ export function buildDiscordTools(ctx: ToolContext) {
     if (ctx.guildId) s.push({ scope: 'guild', scopeId: ctx.guildId });
     return s;
   };
-  // Server-wide memory is admin-only to change, like /claude memory.
+  // Server-wide memory is admin-only to change, like /zclaude memory.
   const writeScopes = () => (ctx.isAdmin ? readScopes() : readScopes().filter((x) => x.scope === 'channel'));
-  const adminOnly = (what: string) => fail(`Only server admins can ${what}. Ask an admin, or use /claude.`);
+  const adminOnly = (what: string) => fail(`Only server admins can ${what}. Ask an admin, or use /zclaude.`);
 
   const tools = [
     tool(

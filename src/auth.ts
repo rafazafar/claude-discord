@@ -40,7 +40,7 @@ export class AuthManager {
     return m;
   }
 
-  /** Runtime override (set by /claude auth) > AUTH_MODE env > whichever credential exists, API key first. */
+  /** Runtime override (set by /zclaude auth) > AUTH_MODE env > whichever credential exists, API key first. */
   mode(): AuthMode {
     const avail = this.available();
     const override = this.store.getSetting(SETTING_KEY) as AuthMode | undefined;

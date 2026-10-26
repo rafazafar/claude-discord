@@ -25,10 +25,13 @@ import { DEFAULT_EFFORT, effectiveEffort } from '../flags.js';
 import { log, errMsg } from '../log.js';
 import { botName } from '../botname.js';
 
-/** The /claude command; descriptions use the bot's Discord name. */
+/** The slash command's name. Renaming it replaces the old one when the bot re-registers its commands. */
+export const COMMAND_NAME = 'zclaude';
+
+/** The /zclaude command; descriptions use the bot's Discord name. */
 export function buildCommand(bot: string) {
   return new SlashCommandBuilder()
-    .setName('claude')
+    .setName(COMMAND_NAME)
     .setDescription(`Configure and control ${bot} in this server`)
     .addSubcommand((s) =>
       s
@@ -256,7 +259,7 @@ export class CommandHandler {
       if (i.isButton() && i.customId.startsWith(STOP_PREFIX)) return await this.stopButton(i);
       if (i.isMessageContextMenuCommand() && (i.commandName === askMenuName(this.bot) || i.commandName === TRANSLATE_MENU)) return await this.ask.menu(i);
       if (i.isModalSubmit() && this.ask.isModal(i.customId)) return await this.ask.modal(i);
-      if (i.isChatInputCommand() && i.commandName === 'claude') return await this.command(i);
+      if (i.isChatInputCommand() && i.commandName === COMMAND_NAME) return await this.command(i);
     } catch (e) {
       log.error('interaction failed', { error: errMsg(e) });
       const content = `⚠️ ${truncate(errMsg(e), 300)}`;
@@ -505,7 +508,7 @@ export class CommandHandler {
     if (i.guild) {
       const ch = store.getChannel(channelId);
       if (!ch) {
-        await i.reply({ content: `${this.bot} is not enabled in this channel. An admin can run \`/claude enable\`.`, ...EPHEMERAL });
+        await i.reply({ content: `${this.bot} is not enabled in this channel. An admin can run \`/zclaude enable\`.`, ...EPHEMERAL });
         return;
       }
       bundleName = ch.bundle;
