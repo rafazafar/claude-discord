@@ -43,7 +43,7 @@ COPY bin ./bin
 # setpriv (bin/claude-as-agent.sh). The agent can't read the bot's environment
 # (Discord token), /data/bot (database), or other root-owned files.
 RUN useradd --create-home --uid 10001 --shell /bin/bash agent \
-  && chmod 0755 /app/bin/claude-as-agent.sh \
+  && chmod 0755 /app/bin/claude-as-agent.sh /app/bin/clone-repo \
   && mkdir -p /data
 VOLUME ["/data"]
 

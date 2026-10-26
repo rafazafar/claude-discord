@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { query, type Options, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Bundle, BundleRegistry, Effort } from './bundles.js';
 import { DEFAULT_BOT_NAME } from './botname.js';
@@ -48,7 +49,12 @@ export interface AgentDeps {
   agentHome: string;
   /** Local plugin holding the team's skills (config/plugin). */
   pluginDir: string;
+  /** Shared repo mirrors used by clone-repo (GitHub bundles). */
+  gitCacheDir?: string;
 }
+
+/** The repo's bin/ (clone-repo), put on the agent's PATH for GitHub bundles. */
+const BIN_DIR = fileURLToPath(new URL('../bin', import.meta.url));
 
 /** Name in config/plugin/.claude-plugin/plugin.json; plugin skills are addressed as `team:<skill>`. */
 export const SKILLS_PLUGIN = 'team';
@@ -130,7 +136,8 @@ export function systemAppend(bundle: Bundle, ctx: RunContext): string {
       bundle.github.repos.length
         ? `You may work on these repositories only: ${bundle.github.repos.join(', ')}.`
         : 'Work only on repositories the requester names.',
-      '- Clone into your working directory. Work on a new branch named `claude/<short-topic>`; never push to the default branch.',
+      '- Clone with `clone-repo owner/repo [dir]` (much faster than `git clone`: it uses a shared cache of the repo; origin is GitHub as usual). Clone into your working directory, and reuse a clone you already have in this conversation after `git pull`.',
+      '- Work on a new branch named `claude/<short-topic>`; never push to the default branch.',
       '- Open pull requests with `gh pr create` and include the PR link in your reply. Authentication is already configured.',
     );
   }
@@ -155,6 +162,8 @@ export function buildOptions(deps: AgentDeps, input: RunInput, resume: string | 
     } else {
       log.warn('github bundle has no token in env', { tokenEnv: bundle.github.tokenEnv });
     }
+    env.PATH = `${BIN_DIR}:${env.PATH}`;
+    if (deps.gitCacheDir) env.GIT_CACHE_DIR = deps.gitCacheDir;
     env.GIT_AUTHOR_NAME = env.GIT_COMMITTER_NAME = bundle.github.gitName;
     env.GIT_AUTHOR_EMAIL = env.GIT_COMMITTER_EMAIL = bundle.github.gitEmail;
   }

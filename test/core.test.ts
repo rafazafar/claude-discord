@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import fs from 'node:fs';
 import os from 'node:os';
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import assert from 'node:assert/strict';
@@ -321,4 +322,62 @@ test('bundles: no per-task budget unless one is set', () => {
 test('slash command is /zclaude', async () => {
   const { buildCommand } = await import('../src/discord/commands.js');
   assert.equal(buildCommand('zClaude').toJSON().name, 'zclaude');
+});
+
+test('workspace cleanup: removes only inactive, idle folders inside the workspaces root', async () => {
+  const { sweepWorkspaces } = await import('../src/cleanup.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ws-'));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'outside-'));
+  const s = new Store(':memory:');
+  const mk = (id: string, cwd: string) => {
+    fs.mkdirSync(path.join(cwd, 'repo'), { recursive: true });
+    s.createThread({ thread_id: id, parent_channel_id: 'c', guild_id: 'g', cwd, bundle: 'b' });
+  };
+  mk('old', path.join(root, 'g', 'c', 'old'));
+  mk('busy', path.join(root, 'g', 'c', 'busy'));
+  mk('fresh', path.join(root, 'g', 'c', 'fresh'));
+  mk('escape', outside);
+  const later = Date.now() + 30 * 86400_000;
+  s.touchThread('fresh');
+  s.db.prepare('UPDATE threads SET last_active = ? WHERE thread_id = ?').run(later, 'fresh');
+  const n = await sweepWorkspaces({ store: s, workspacesDir: root, retentionDays: 14, isBusy: (k) => k === 'busy', now: later });
+  assert.equal(n, 1);
+  assert.equal(fs.existsSync(path.join(root, 'g', 'c', 'old')), false);
+  assert.ok(fs.existsSync(path.join(root, 'g', 'c', 'busy')));
+  assert.ok(fs.existsSync(path.join(root, 'g', 'c', 'fresh')));
+  assert.ok(fs.existsSync(outside));
+  assert.ok(s.getThread('old'), 'the conversation itself is kept');
+  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(outside, { recursive: true, force: true });
+});
+
+test('github bundles are told to use clone-repo; cleared folders are announced', () => {
+  const f = parseBundlesFile({ bundles: { eng: { capabilities: ['github'], github: {} } } });
+  assert.match(systemAppend(f.bundles.eng!, { guildName: 'G', channelName: 'dev', isDM: false, bundleName: 'eng' }), /clone-repo owner\/repo/);
+  const runs = new RunManager({ store: new Store(':memory:'), cfg: { MAX_CONCURRENT_RUNS: 1, DEFAULT_TIMEZONE: 'UTC' } } as unknown as ConstructorParameters<typeof RunManager>[0]);
+  const item = { key: 'k', trigger: 'mention', guildId: 'g', configChannelId: 'c', userId: 'u', userName: 'U', content: 'x', contextLines: [] } as unknown as WorkItem;
+  assert.match(runs.buildPrompt([item], [], true), /working directory was cleared/);
+  assert.doesNotMatch(runs.buildPrompt([item], []), /working directory was cleared/);
+});
+
+test('clone-repo clones through a shared mirror and picks up new commits', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'clone-'));
+  const sh = (cmd: string, cwd = tmp, env: Record<string, string> = {}) =>
+    execSync(cmd, { cwd, env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', ...env }, stdio: 'pipe' }).toString();
+  const work = path.join(tmp, 'work');
+  fs.mkdirSync(work);
+  sh('git init -q -b main && echo one > a.txt && git add . && git commit -qm one', work);
+  fs.mkdirSync(path.join(tmp, 'src', 'acme'), { recursive: true });
+  sh(`git clone -q --bare ${work} src/acme/app.git`);
+  const env = { CLONE_REPO_BASE_URL: `file://${tmp}/src`, GIT_CACHE_DIR: path.join(tmp, 'cache') };
+  const bin = path.resolve('bin/clone-repo');
+  fs.mkdirSync(path.join(tmp, 'w1'));
+  sh(`${bin} acme/app`, path.join(tmp, 'w1'), env);
+  assert.ok(fs.existsSync(path.join(tmp, 'w1/app/.git/objects/info/alternates')));
+  sh(`echo two >> a.txt && git commit -qam two && git push -q ${tmp}/src/acme/app.git main`, work);
+  fs.mkdirSync(path.join(tmp, 'w2'));
+  sh(`${bin} acme/app mine`, path.join(tmp, 'w2'), env);
+  assert.equal(sh('git log --oneline', path.join(tmp, 'w2/mine')).trim().split('\n').length, 2);
+  assert.throws(() => sh(`${bin} 'not a repo'`, tmp, env));
+  fs.rmSync(tmp, { recursive: true, force: true });
 });

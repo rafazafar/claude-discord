@@ -99,6 +99,7 @@ To add one, put its folder under `config/plugin/skills/`, add its name to a bund
 | `DEFAULT_TIMEZONE` | `UTC` | IANA timezone for schedules that don't name one, e.g. `Europe/London`. |
 | `MAX_CONCURRENT_RUNS` | `4` | Runs allowed at once across the whole bot. |
 | `CONTEXT_MESSAGES` | `25` | Recent channel messages (0–100) given as context when tagged. |
+| `WORKSPACE_RETENTION_DAYS` | `14` | Days without activity before a conversation's working folder (repo clones, files) is deleted. The conversation itself is kept. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
 | `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `ANTHROPIC_BASE_URL` | – | Network settings passed through to the agent, only if your host needs them. |
 
@@ -124,6 +125,12 @@ DEFAULT_TIMEZONE=Europe/London
 ```
 
 State (SQLite DB, session transcripts, workspaces) lives in the `claude-data` volume, so threads resume after redeploys.
+
+### Workspaces and repo clones
+
+Each conversation (a tag, a reply chain, a thread, or your private questions in a channel) gets its own working folder under `/data/workspaces`, so parallel tasks never share a checkout. In GitHub bundles zClaude clones with `clone-repo owner/repo`, which keeps one shared mirror per repo in `/data/git-cache` and clones from it: a large repo's history is downloaded once, and each new task's clone only fetches what's new and takes seconds. Pushes and PRs go to GitHub as usual.
+
+Folders untouched for `WORKSPACE_RETENTION_DAYS` (default 14) are deleted daily; replying to such a conversation later still works, and zClaude re-clones. Mirrors are kept (one per repo). Don't delete `/data/git-cache` while workspaces exist: clones borrow objects from it.
 
 To change bundles without rebuilding, uncomment the bind mount in `docker-compose.yml` (or use a Dokploy file mount at `/app/config/bundles.json`).
 

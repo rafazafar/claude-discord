@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# clone-repo owner/repo [dir] [git clone options...]
+#
+# Clones a GitHub repo into the current directory using a shared bare mirror in
+# $GIT_CACHE_DIR, so each repo's history is downloaded once and every later clone only
+# fetches what's new. The clone is normal: origin is GitHub, push and pull work as usual.
+# Its objects come from the mirror via --reference, so the mirror must not be deleted
+# while clones that use it exist (mirrors are never pruned or gc'd for that reason).
+set -euo pipefail
+
+repo="${1:-}"
+if [[ ! "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+  echo "usage: clone-repo owner/repo [dir] [git clone options...]" >&2
+  exit 2
+fi
+repo="${repo%.git}"
+shift
+dir="${1:-${repo#*/}}"
+[[ $# -gt 0 ]] && shift
+
+url="${CLONE_REPO_BASE_URL:-https://github.com}/$repo.git"
+cache="${GIT_CACHE_DIR:-}"
+
+if [[ -z "$cache" ]]; then
+  exec git clone "$@" "$url" "$dir"
+fi
+
+mirror="$cache/$repo.git"
+mkdir -p "$(dirname "$mirror")"
+
+update_mirror() {
+  if [[ -d "$mirror" ]]; then
+    git -C "$mirror" fetch --quiet --prune origin
+  else
+    # Clone into a temporary name and rename, so an interrupted first clone never leaves a broken mirror.
+    local tmp="$mirror.tmp.$$"
+    rm -rf "$tmp"
+    git clone --quiet --bare "$url" "$tmp"
+    # Branches and tags only (not GitHub's refs/pull/*), and never drop objects clones may borrow.
+    git -C "$tmp" config remote.origin.fetch '+refs/heads/*:refs/heads/*'
+    git -C "$tmp" config --add remote.origin.fetch '+refs/tags/*:refs/tags/*'
+    git -C "$tmp" config gc.auto 0
+    git -C "$tmp" config gc.pruneExpire never
+    mv "$tmp" "$mirror"
+  fi
+}
+
+# One update at a time per repo; parallel tasks wait their turn (flock isn't on macOS: skip there).
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$mirror.lock"
+  flock -w 900 9 || { echo "clone-repo: timed out waiting for another clone of $repo" >&2; exit 1; }
+fi
+if ! update_mirror; then
+  echo "clone-repo: couldn't update the cache for $repo; cloning without it" >&2
+  exec git clone "$@" "$url" "$dir"
+fi
+if command -v flock >/dev/null 2>&1; then
+  exec 9>&-
+fi
+
+git clone --reference "$mirror" "$@" "$url" "$dir"

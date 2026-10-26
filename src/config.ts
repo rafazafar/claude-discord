@@ -50,6 +50,9 @@ const EnvSchema = z.object({
   /** Messages of recent channel history passed as context when tagged in a channel. */
   CONTEXT_MESSAGES: z.coerce.number().int().min(0).max(100).default(25),
 
+  /** Days without activity before a conversation's working folder (clones, files) is deleted. */
+  WORKSPACE_RETENTION_DAYS: z.coerce.number().int().min(1).default(14),
+
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 
@@ -58,6 +61,7 @@ export type Config = z.infer<typeof EnvSchema> & {
   workspacesDir: string;
   agentHome: string;
   pluginDir: string;
+  gitCacheDir: string;
 };
 
 function load(): Config {
@@ -90,6 +94,8 @@ function load(): Config {
     agentHome: path.join(env.DATA_DIR, 'home'),
     // Team skills ship next to bundles.json as a local Claude Code plugin.
     pluginDir: path.join(path.dirname(env.BUNDLES_FILE), 'plugin'),
+    // Shared bare mirrors of GitHub repos; clone-repo clones from them with --reference.
+    gitCacheDir: path.join(env.DATA_DIR, 'git-cache'),
   };
 }
 

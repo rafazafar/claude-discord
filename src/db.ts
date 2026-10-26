@@ -280,6 +280,11 @@ export class Store {
     this.db.prepare('UPDATE threads SET quiet = ? WHERE thread_id = ?').run(quiet ? 1 : 0, threadId);
   }
 
+  /** Conversations with no activity since `before`: candidates for workspace cleanup. */
+  listInactiveThreads(before: number): ThreadRow[] {
+    return this.db.prepare('SELECT * FROM threads WHERE last_active < ?').all(before) as ThreadRow[];
+  }
+
   touchThread(threadId: string): void {
     this.db.prepare('UPDATE threads SET last_active = ? WHERE thread_id = ?').run(Date.now(), threadId);
   }

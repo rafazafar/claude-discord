@@ -10,6 +10,7 @@ import { CommandHandler, registerCommands } from './discord/commands.js';
 import { Scheduler } from './scheduler.js';
 import { log, errMsg } from './log.js';
 import { botName } from './botname.js';
+import { scheduleWorkspaceCleanup } from './cleanup.js';
 import { agentIds, ensureAgentDir, ensurePrivateDir } from './sandbox.js';
 
 async function main() {
@@ -17,6 +18,7 @@ async function main() {
   ensurePrivateDir(path.dirname(cfg.dbPath));
   ensureAgentDir(cfg.workspacesDir);
   ensureAgentDir(cfg.agentHome);
+  ensureAgentDir(cfg.gitCacheDir);
   const agent = agentIds();
   log.info('agent isolation', { runAs: agent ? agent.user : 'same user as bot (dev mode)' });
 
@@ -55,6 +57,12 @@ async function main() {
       log.error('failed to register slash commands', { error: errMsg(e) });
     }
     scheduler.reload();
+    scheduleWorkspaceCleanup({
+      store,
+      workspacesDir: cfg.workspacesDir,
+      retentionDays: cfg.WORKSPACE_RETENTION_DAYS,
+      isBusy: (key) => runs.isBusy(key),
+    });
   });
   client.on(Events.MessageCreate, (m) => void messages.onMessage(m));
   client.on(Events.InteractionCreate, (i) => void commands.onInteraction(i));

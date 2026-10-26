@@ -289,7 +289,7 @@ export class RunManager {
     return saved;
   }
 
-  buildPrompt(items: WorkItem[], files: string[]): string {
+  buildPrompt(items: WorkItem[], files: string[], workspaceCleared = false): string {
     const first = items[0]!;
     const { store, cfg } = this.deps;
     const channelMem = store.listMemories('channel', first.configChannelId);
@@ -302,6 +302,9 @@ export class RunManager {
     ];
     if (guildMem.length) ctx.push('Server memory:', ...guildMem.map((m) => `- #${m.id} ${m.content}`));
     if (channelMem.length) ctx.push('Channel memory:', ...channelMem.map((m) => `- #${m.id} ${m.content}`));
+    if (workspaceCleared) {
+      ctx.push('Your working directory was cleared after a period of inactivity: files and clones from earlier in this conversation are gone. Clone or recreate what you need.');
+    }
     if (files.length) ctx.push('Attachments saved in your working directory:', ...files.map((f) => `- ${f}`));
     if (first.contextLines.length) ctx.push('Earlier conversation (oldest first):', ...first.contextLines.map(escapeTags));
 
@@ -358,8 +361,10 @@ export class RunManager {
     const model = flagged.find((i) => i.modelOverride)?.modelOverride ?? channelRow?.model ?? bundle.model ?? cfg.CLAUDE_MODEL;
     const effort = effectiveEffort(model, flagged.find((i) => i.effortOverride)?.effortOverride ?? channelRow?.effort ?? bundle.effort);
     const working = `⏳ Working on it… · ${shortModel(model)} · ${effort}`;
+    // A resumed conversation whose folder the daily cleanup removed (see cleanup.ts).
+    const cleared = !!thread.session_id && !fs.existsSync(thread.cwd);
     const files = await this.downloadAttachments(items, thread.cwd);
-    const prompt = this.buildPrompt(items, files);
+    const prompt = this.buildPrompt(items, files, cleared);
 
     let status: StatusReporter | null = null;
     let channel: SendableChannels | null = null;
@@ -408,7 +413,7 @@ export class RunManager {
         trigger: first.trigger,
       });
       result = await runAgent(
-        { bundles, auth, agentHome: cfg.agentHome, pluginDir: cfg.pluginDir },
+        { bundles, auth, agentHome: cfg.agentHome, pluginDir: cfg.pluginDir, gitCacheDir: cfg.gitCacheDir },
         {
           prompt,
           bundle,
