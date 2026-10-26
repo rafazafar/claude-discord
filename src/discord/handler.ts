@@ -18,6 +18,7 @@ import { threadTitle } from '../format.js';
 import { fetchLines, hasAnyRole, isAdmin, stripBotMention, workspaceFor } from './util.js';
 import { log, errMsg } from '../log.js';
 import { parseRunFlags } from '../flags.js';
+import { botName } from '../botname.js';
 
 export interface HandlerDeps {
   client: Client;
@@ -314,6 +315,7 @@ export class MessageHandler {
         history,
         latest: `${m.member?.displayName ?? m.author.username}: ${m.cleanContent}`,
         memories,
+        botName: botName(this.d.client),
       });
       log.debug('ambient decision', { channel: ch.channel_id, ...decision });
       if (!decision.reply) return;

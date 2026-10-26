@@ -1,18 +1,20 @@
-# Claude for Discord
+# zClaude for Discord
 
-A Claude Tag–style teammate for Discord, built on the [Claude Agent SDK](https://docs.claude.com/en/docs/agent-sdk/overview). Tag `@Claude` in a channel and it works through the task with the tools its channel allows, then replies right there. Reply to its message to keep going, or start a thread yourself and tag it there. Channels can opt in to a thread per task instead.
+The bot goes by **zClaude** (it runs on Anthropic's Claude). Its replies, the right-click entries and the way it introduces itself use the bot's name in Discord, so renaming the bot in the Developer Portal is enough to change them; the slash command stays `/claude`.
+
+A Claude Tag–style teammate for Discord, built on the [Claude Agent SDK](https://docs.claude.com/en/docs/agent-sdk/overview). Tag `@zClaude` in a channel and it works through the task with the tools its channel allows, then replies right there. Reply to its message to keep going, or start a thread yourself and tag it there. Channels can opt in to a thread per task instead.
 
 ## What it does
 
 | Claude Tag feature | Here |
 |---|---|
-| Tag `@Claude` to hand off work | Mention → live progress with a **Stop** button → result, posted as a reply in the channel. Using Discord's **Reply** on any of Claude's messages continues that conversation; a new tag starts a fresh one (with recent channel messages as context). Messages sent mid-run are batched into the next turn. |
+| Tag `@zClaude` to hand off work | Mention → live progress with a **Stop** button → result, posted as a reply in the channel. Using Discord's **Reply** on any of Claude's messages continues that conversation; a new tag starts a fresh one (with recent channel messages as context). Messages sent mid-run are batched into the next turn. |
 | Threads | Start a thread yourself and tag Claude in it: it joins, and follow-ups there go to Claude without re-tagging. `/claude threads mode:on` makes Claude open a thread for every task in that channel instead. |
 | Access bundles per channel | `config/bundles.json` defines bundles (web, code, GitHub, MCP servers, role limits, step/budget caps). Admins attach one per channel with `/claude enable`. |
 | Channel memory | "From now on…" instructions are saved per channel or server and fed into every session. Manage with `/claude memory`. |
 | Ambient behaviour | `/claude reply mode:ambient` lets Claude jump in when a small model judges it can clearly help. Rate-limited per channel. |
 | Standing scheduled work | "Every weekday at 9am, summarise yesterday" → a cron schedule that posts each run in the channel (or in a fresh thread when threads are on) (text and announcement channels; not forums). |
-| Private questions | `/claude ask` asks Claude about the channel so only you see it: the command, your prompt and the answer are hidden from everyone else. Or right-click a message → **Apps** → **Ask Claude privately** to ask about the conversation from that message on (e.g. "what are they saying? translate and explain the tone"). **Translate from here** (same menu) skips the question and privately translates the conversation from that message on into your Discord language, with a gist and notes on tone. Follow-up asks in the same channel continue your private session; `new:true` starts over. |
+| Private questions | `/claude ask` asks Claude about the channel so only you see it: the command, your prompt and the answer are hidden from everyone else. Or right-click a message → **Apps** → **Ask zClaude privately** to ask about the conversation from that message on (e.g. "what are they saying? translate and explain the tone"). **Translate from here** (same menu) skips the question and privately translates the conversation from that message on into your Discord language, with a gist and notes on tone. Follow-up asks in the same channel continue your private session; `new:true` starts over. |
 | Quieting | "Stop replying here" → quiet thread or reply chain; `/claude reply mode:mention` → mention-only. |
 | DMs | Optional (off by default), on their own bundle. |
 | Switchable credential | API key or Claude plan sign-in; flip live with `/claude auth`. |
@@ -132,12 +134,12 @@ Once the deploy is running, the bot you invited in step 1 shows as **online** in
 In a channel, an admin runs `/claude enable bundle:engineering`. Then anyone:
 
 ```
-@Claude the signup form 500s when the email has a plus sign — find it and open a PR
-@Claude summarise this channel's last week of discussion
-@Claude every Monday at 9am, post a summary of open PRs in your-org/your-repo
-@Claude from now on, answer in Japanese in this channel
-@Claude --sonnet --low summarise today's discussion
-@Claude --opus --high why does the payment webhook double-charge?
+@zClaude the signup form 500s when the email has a plus sign — find it and open a PR
+@zClaude summarise this channel's last week of discussion
+@zClaude every Monday at 9am, post a summary of open PRs in your-org/your-repo
+@zClaude from now on, answer in Japanese in this channel
+@zClaude --sonnet --low summarise today's discussion
+@zClaude --opus --high why does the payment webhook double-charge?
 ```
 
 Flags at the start of a message pick the model (`--opus`, `--sonnet`, `--haiku`) and effort (`--low`, `--medium`, `--high`, `--xhigh`, `--max`) for that one run, over the channel's settings. Anyone can use them; Opus still caps at `high`. The progress message shows what's in use (`⏳ Working on it… · sonnet · low`). `/claude ask` has the same choices as `model` and `effort` options.

@@ -98,7 +98,7 @@ export function threadTitle(content: string): string {
     .replace(/https?:\/\/\S+/g, 'link')
     .replace(/[`*_~>|]/g, '')
     .trim();
-  return truncate(cleaned || 'Claude task', 90);
+  return truncate(cleaned || 'New task', 90);
 }
 
 export function formatDuration(ms: number): string {

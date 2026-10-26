@@ -8,6 +8,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
   type ChatInputCommandInteraction,
+  type Client,
   type GuildMember,
   type Message,
   type MessageContextMenuCommandInteraction,
@@ -21,6 +22,7 @@ import type { Config } from '../config.js';
 import type { PrivateReply, RunManager } from './runs.js';
 import { fetchLines, fetchMessages, formatMessageLine, hasAnyRole, isAdmin, workspaceFor } from './util.js';
 import { log, errMsg } from '../log.js';
+import { botName } from '../botname.js';
 import { MODEL_ALIASES } from '../flags.js';
 import type { Effort } from '../bundles.js';
 
@@ -31,7 +33,10 @@ import type { Effort } from '../bundles.js';
  * gets one private session per channel, so follow-up questions keep their context.
  */
 
-export const ASK_MENU = 'Ask Claude privately';
+/** "Ask zClaude privately": named after the bot, as registered at startup. */
+export function askMenuName(bot: string): string {
+  return `Ask ${bot} privately`;
+}
 export const TRANSLATE_MENU = 'Translate from here';
 /** The question "Translate from here" asks; the asker's Discord language decides the target. */
 export const TRANSLATE_PROMPT =
@@ -44,10 +49,12 @@ const INTERACTION_WINDOW_MS = 13 * 60_000;
 const MAX_FROM_ANCHOR = 100;
 const BEFORE_ANCHOR = 10;
 
-export const askMenuCommand = new ContextMenuCommandBuilder()
-  .setName(ASK_MENU)
-  .setType(ApplicationCommandType.Message)
-  .setContexts(InteractionContextType.Guild);
+export function askMenuCommand(bot: string) {
+  return new ContextMenuCommandBuilder()
+    .setName(askMenuName(bot))
+    .setType(ApplicationCommandType.Message)
+    .setContexts(InteractionContextType.Guild);
+}
 
 export const translateMenuCommand = new ContextMenuCommandBuilder()
   .setName(TRANSLATE_MENU)
@@ -59,6 +66,7 @@ export function askKey(channelId: string, userId: string): string {
 }
 
 export interface AskDeps {
+  client: Client;
   store: Store;
   bundles: BundleRegistry;
   cfg: Config;
@@ -102,7 +110,7 @@ export class AskHandler {
     await i.showModal(
       new ModalBuilder()
         .setCustomId(MODAL_PREFIX + i.targetId)
-        .setTitle('Ask Claude privately')
+        .setTitle(askMenuName(botName(this.d.client)).slice(0, 45))
         .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input)),
     );
   }
@@ -126,12 +134,12 @@ export class AskHandler {
     const ch = configChannelId ? store.getChannel(configChannelId) : undefined;
     const bundle = ch ? bundles.get(ch.bundle) : undefined;
     if (!ch || !bundle) {
-      await i.reply({ content: "Claude isn't set up in this channel. An admin can run `/claude enable` here.", ...EPHEMERAL });
+      await i.reply({ content: `${botName(this.d.client)} isn't set up in this channel. An admin can run \`/claude enable\` here.`, ...EPHEMERAL });
       return;
     }
     const admin = isAdmin(cfg, i.user.id, i.member);
     if (!admin && !hasAnyRole(i.member, bundle.allowedRoleIds)) {
-      await i.reply({ content: "You don't have a role that can use Claude in this channel.", ...EPHEMERAL });
+      await i.reply({ content: `You don't have a role that can use ${botName(this.d.client)} in this channel.`, ...EPHEMERAL });
       return;
     }
     const key = askKey(channel.id, i.user.id);

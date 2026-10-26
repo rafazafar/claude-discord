@@ -39,7 +39,7 @@ test('tablesToCodeBlocks converts markdown tables', () => {
 
 test('threadTitle strips mentions and is short', () => {
   assert.equal(threadTitle('<@123> fix the build please'), 'fix the build please');
-  assert.equal(threadTitle('<@123>'), 'Claude task');
+  assert.equal(threadTitle('<@123>'), 'New task');
   assert.ok(threadTitle('x'.repeat(300)).length <= 90);
 });
 
@@ -73,6 +73,8 @@ test('builtinTools and system prompt reflect the bundle', () => {
   const sp = systemAppend(f.bundles.eng!, { guildName: 'G', channelName: 'dev', isDM: false, bundleName: 'eng' });
   assert.match(sp, /o\/r/);
   assert.match(sp, /#dev/);
+  assert.match(sp, /you are zClaude/);
+  assert.match(systemAppend(f.bundles.web!, { guildName: 'G', channelName: 'dev', isDM: false, bundleName: 'web', botName: 'Kumo' }), /you are Kumo/);
 });
 
 test('store: channels, threads, memory scoping, schedules, settings, usage', () => {
@@ -270,7 +272,8 @@ test('private asks: own key per person and channel, and a prompt that says only 
 });
 
 test('message menu entries are distinct guild-only message commands', () => {
-  const ask = askMenuCommand.toJSON();
+  const ask = askMenuCommand('zClaude').toJSON();
+  assert.equal(ask.name, 'Ask zClaude privately');
   const tr = translateMenuCommand.toJSON();
   assert.notEqual(ask.name, tr.name);
   for (const c of [ask, tr]) {

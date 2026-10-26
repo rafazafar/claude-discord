@@ -15,9 +15,9 @@ export interface AmbientDecision {
   reason: string;
 }
 
-const SYSTEM = `You decide whether an AI teammate named Claude should jump into a Discord conversation without being asked.
-Claude should reply ONLY when ALL are true:
-- The latest message contains a question, request or problem Claude could concretely help with (facts, code, debugging, research, summarising, planning).
+const system = (bot: string) => `You decide whether an AI teammate named ${bot} should jump into a Discord conversation without being asked.
+${bot} should reply ONLY when ALL are true:
+- The latest message contains a question, request or problem ${bot} could concretely help with (facts, code, debugging, research, summarising, planning).
 - It is not purely social chatter, a reaction, an acknowledgement, or a message clearly addressed to a specific person.
 - Nobody has already answered it adequately in the recent messages.
 - Replying would be welcome rather than intrusive, given any channel instructions.
@@ -43,6 +43,7 @@ export async function shouldJumpIn(opts: {
   history: string[];
   latest: string;
   memories: string[];
+  botName: string;
 }): Promise<AmbientDecision> {
   const prompt = [
     opts.memories.length ? `Channel instructions:\n${opts.memories.map((m) => `- ${m}`).join('\n')}\n` : '',
@@ -58,7 +59,7 @@ export async function shouldJumpIn(opts: {
       options: {
         model: opts.model,
         cwd: opts.cwd,
-        systemPrompt: SYSTEM,
+        systemPrompt: system(opts.botName),
         tools: [],
         allowedTools: [],
         maxTurns: 1,

@@ -18,202 +18,206 @@ import type { Scheduler } from '../scheduler.js';
 import { builtinTools } from '../agent.js';
 import { validateCron } from '../tools.js';
 import { STOP_PREFIX, type RunManager } from './runs.js';
-import { ASK_MENU, AskHandler, TRANSLATE_MENU, askKey, askMenuCommand, translateMenuCommand } from './ask.js';
+import { AskHandler, TRANSLATE_MENU, askKey, askMenuCommand, askMenuName, translateMenuCommand } from './ask.js';
 import { hasAnyRole, isAdmin } from './util.js';
 import { truncate } from '../format.js';
 import { DEFAULT_EFFORT, effectiveEffort } from '../flags.js';
 import { log, errMsg } from '../log.js';
+import { botName } from '../botname.js';
 
-export const command = new SlashCommandBuilder()
-  .setName('claude')
-  .setDescription('Configure and control Claude in this server')
-  .addSubcommand((s) =>
-    s
-      .setName('ask')
-      .setDescription('Ask Claude privately about this channel: only you see the question and the answer')
-      .addStringOption((o) =>
-        o.setName('prompt').setDescription('e.g. What are they discussing? Translate the last few messages.').setRequired(true).setMaxLength(4000),
-      )
-      .addBooleanOption((o) => o.setName('new').setDescription('Forget your earlier private questions here and start fresh'))
-      .addStringOption((o) =>
-        o
-          .setName('model')
-          .setDescription("Model for this question (default: the channel's)")
-          .addChoices({ name: 'Opus', value: 'opus' }, { name: 'Sonnet', value: 'sonnet' }, { name: 'Haiku', value: 'haiku' }),
-      )
-      .addStringOption((o) =>
-        o
-          .setName('effort')
-          .setDescription("How hard to think for this question (default: the channel's; Opus maxes out at high)")
-          .addChoices(
-            { name: 'Low', value: 'low' },
-            { name: 'Medium', value: 'medium' },
-            { name: 'High', value: 'high' },
-            { name: 'Extra high', value: 'xhigh' },
-            { name: 'Max', value: 'max' },
-          ),
-      ),
-  )
-  .addSubcommand((s) =>
-    s
-      .setName('enable')
-      .setDescription('Admin: enable Claude in this channel with an access bundle')
-      .addStringOption((o) => o.setName('bundle').setDescription('Access bundle').setRequired(true).setAutocomplete(true)),
-  )
-  .addSubcommand((s) => s.setName('disable').setDescription('Admin: remove Claude from this channel'))
-  .addSubcommand((s) => s.setName('status').setDescription("Show what Claude can access here and how it's configured"))
-  .addSubcommand((s) =>
-    s
-      .setName('reply')
-      .setDescription('Choose when Claude replies in this channel')
-      .addStringOption((o) =>
-        o
-          .setName('mode')
-          .setDescription('mention = only when tagged; ambient = may jump in unprompted (admin)')
-          .setRequired(true)
-          .addChoices({ name: 'Only when mentioned', value: 'mention' }, { name: 'Ambient (jump in when helpful)', value: 'ambient' }),
-      ),
-  )
-  .addSubcommand((s) =>
-    s
-      .setName('threads')
-      .setDescription('Admin: whether Claude opens a thread for each task in this channel')
-      .addStringOption((o) =>
-        o
-          .setName('mode')
-          .setDescription('off = reply in the channel (default); on = open a thread per task')
-          .setRequired(true)
-          .addChoices({ name: 'Off: reply in the channel', value: 'off' }, { name: 'On: open a thread per task', value: 'on' }),
-      ),
-  )
-  .addSubcommand((s) =>
-    s
-      .setName('model')
-      .setDescription('Admin: which Claude model works in this channel (bigger is better and costs more)')
-      .addStringOption((o) =>
-        o
-          .setName('name')
-          .setDescription("Model, or default to use the bundle's")
-          .setRequired(true)
-          .addChoices(
-            { name: 'Opus 5.5: most capable', value: 'claude-opus-5-5' },
-            { name: 'Sonnet 5.5: balanced', value: 'claude-sonnet-5-5' },
-            { name: 'Haiku 5.5: fastest and cheapest', value: 'claude-haiku-5-5' },
-            { name: "Default: use the bundle's model", value: 'default' },
-          ),
-      ),
-  )
-  .addSubcommand((s) =>
-    s
-      .setName('effort')
-      .setDescription('Admin: how hard Claude thinks in this channel (higher is slower and costs more)')
-      .addStringOption((o) =>
-        o
-          .setName('level')
-          .setDescription("Effort level, or default to use the bundle's")
-          .setRequired(true)
-          .addChoices(
-            { name: 'Low: quick answers', value: 'low' },
-            { name: 'Medium', value: 'medium' },
-            { name: 'High', value: 'high' },
-            { name: 'Extra high', value: 'xhigh' },
-            { name: 'Max: hardest problems', value: 'max' },
-            { name: "Default: use the bundle's setting", value: 'default' },
-          ),
-      ),
-  )
-  .addSubcommand((s) => s.setName('stop').setDescription("Stop Claude's current work in this thread or channel"))
-  .addSubcommand((s) => s.setName('reset').setDescription('Start a fresh session in this thread or DM (forgets the conversation)'))
-  .addSubcommandGroup((g) =>
-    g
-      .setName('memory')
-      .setDescription('Standing instructions Claude follows here')
-      .addSubcommand((s) => s.setName('list').setDescription('Show channel and server memory'))
-      .addSubcommand((s) =>
-        s
-          .setName('add')
-          .setDescription('Add a standing instruction')
-          .addStringOption((o) => o.setName('text').setDescription('The instruction').setRequired(true).setMaxLength(500))
-          .addStringOption((o) =>
-            o
-              .setName('scope')
-              .setDescription('Channel (default) or whole server (admin)')
-              .addChoices({ name: 'This channel', value: 'channel' }, { name: 'Whole server', value: 'guild' }),
-          ),
-      )
-      .addSubcommand((s) =>
-        s
-          .setName('forget')
-          .setDescription('Delete one memory by id')
-          .addIntegerOption((o) => o.setName('id').setDescription('Memory id').setRequired(true)),
-      )
-      .addSubcommand((s) =>
-        s
-          .setName('clear')
-          .setDescription('Admin: delete all memory for this channel or server')
-          .addStringOption((o) =>
-            o
-              .setName('scope')
-              .setDescription('What to clear')
-              .setRequired(true)
-              .addChoices({ name: 'This channel', value: 'channel' }, { name: 'Whole server', value: 'guild' }),
-          ),
-      ),
-  )
-  .addSubcommandGroup((g) =>
-    g
-      .setName('schedule')
-      .setDescription('Standing work that runs on a schedule')
-      .addSubcommand((s) => s.setName('list').setDescription('List schedules in this channel'))
-      .addSubcommand((s) =>
-        s
-          .setName('add')
-          .setDescription('Add a scheduled task (or just ask Claude in plain words)')
-          .addStringOption((o) => o.setName('cron').setDescription('Cron, e.g. "0 9 * * 1-5"').setRequired(true))
-          .addStringOption((o) => o.setName('prompt').setDescription('Standalone instruction for each run').setRequired(true).setMaxLength(4000))
-          .addStringOption((o) => o.setName('description').setDescription('Short label').setMaxLength(200))
-          .addStringOption((o) => o.setName('timezone').setDescription('IANA timezone, e.g. Asia/Tokyo')),
-      )
-      .addSubcommand((s) =>
-        s
-          .setName('cancel')
-          .setDescription('Cancel a schedule')
-          .addIntegerOption((o) => o.setName('id').setDescription('Schedule id').setRequired(true)),
-      )
-      .addSubcommand((s) =>
-        s
-          .setName('run')
-          .setDescription('Run a schedule now')
-          .addIntegerOption((o) => o.setName('id').setDescription('Schedule id').setRequired(true)),
-      ),
-  )
-  .addSubcommand((s) =>
-    s
-      .setName('auth')
-      .setDescription('Admin: switch between API key and Claude plan sign-in')
-      .addStringOption((o) =>
-        o
-          .setName('mode')
-          .setDescription('Credential to use')
-          .setRequired(true)
-          .addChoices(
-            { name: 'API key (pay-as-you-go / plan monthly API credits)', value: 'api_key' },
-            { name: 'Claude plan sign-in (plan usage limits)', value: 'oauth_token' },
-            { name: 'Default from environment', value: 'default' },
-          ),
-      ),
-  )
-  .addSubcommand((s) =>
-    s
-      .setName('usage')
-      .setDescription('Admin: runs and estimated cost')
-      .addIntegerOption((o) => o.setName('days').setDescription('Look-back window (default 30)').setMinValue(1).setMaxValue(365)),
-  )
-  .addSubcommand((s) => s.setName('bundles').setDescription('Admin: list access bundles'));
+/** The /claude command; descriptions use the bot's Discord name. */
+export function buildCommand(bot: string) {
+  return new SlashCommandBuilder()
+    .setName('claude')
+    .setDescription(`Configure and control ${bot} in this server`)
+    .addSubcommand((s) =>
+      s
+        .setName('ask')
+        .setDescription(`Ask ${bot} privately about this channel: only you see the question and the answer`)
+        .addStringOption((o) =>
+          o.setName('prompt').setDescription('e.g. What are they discussing? Translate the last few messages.').setRequired(true).setMaxLength(4000),
+        )
+        .addBooleanOption((o) => o.setName('new').setDescription('Forget your earlier private questions here and start fresh'))
+        .addStringOption((o) =>
+          o
+            .setName('model')
+            .setDescription("Model for this question (default: the channel's)")
+            .addChoices({ name: 'Opus', value: 'opus' }, { name: 'Sonnet', value: 'sonnet' }, { name: 'Haiku', value: 'haiku' }),
+        )
+        .addStringOption((o) =>
+          o
+            .setName('effort')
+            .setDescription("How hard to think for this question (default: the channel's; Opus maxes out at high)")
+            .addChoices(
+              { name: 'Low', value: 'low' },
+              { name: 'Medium', value: 'medium' },
+              { name: 'High', value: 'high' },
+              { name: 'Extra high', value: 'xhigh' },
+              { name: 'Max', value: 'max' },
+            ),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('enable')
+        .setDescription(`Admin: enable ${bot} in this channel with an access bundle`)
+        .addStringOption((o) => o.setName('bundle').setDescription('Access bundle').setRequired(true).setAutocomplete(true)),
+    )
+    .addSubcommand((s) => s.setName('disable').setDescription(`Admin: remove ${bot} from this channel`))
+    .addSubcommand((s) => s.setName('status').setDescription(`Show what ${bot} can access here and how it's configured`))
+    .addSubcommand((s) =>
+      s
+        .setName('reply')
+        .setDescription(`Choose when ${bot} replies in this channel`)
+        .addStringOption((o) =>
+          o
+            .setName('mode')
+            .setDescription('mention = only when tagged; ambient = may jump in unprompted (admin)')
+            .setRequired(true)
+            .addChoices({ name: 'Only when mentioned', value: 'mention' }, { name: 'Ambient (jump in when helpful)', value: 'ambient' }),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('threads')
+        .setDescription(`Admin: whether ${bot} opens a thread for each task in this channel`)
+        .addStringOption((o) =>
+          o
+            .setName('mode')
+            .setDescription('off = reply in the channel (default); on = open a thread per task')
+            .setRequired(true)
+            .addChoices({ name: 'Off: reply in the channel', value: 'off' }, { name: 'On: open a thread per task', value: 'on' }),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('model')
+        .setDescription(`Admin: which model ${bot} uses in this channel (bigger is better and costs more)`)
+        .addStringOption((o) =>
+          o
+            .setName('name')
+            .setDescription("Model, or default to use the bundle's")
+            .setRequired(true)
+            .addChoices(
+              { name: 'Opus 5.5: most capable', value: 'claude-opus-5-5' },
+              { name: 'Sonnet 5.5: balanced', value: 'claude-sonnet-5-5' },
+              { name: 'Haiku 5.5: fastest and cheapest', value: 'claude-haiku-5-5' },
+              { name: "Default: use the bundle's model", value: 'default' },
+            ),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('effort')
+        .setDescription(`Admin: how hard ${bot} thinks in this channel (higher is slower and costs more)`)
+        .addStringOption((o) =>
+          o
+            .setName('level')
+            .setDescription("Effort level, or default to use the bundle's")
+            .setRequired(true)
+            .addChoices(
+              { name: 'Low: quick answers', value: 'low' },
+              { name: 'Medium', value: 'medium' },
+              { name: 'High', value: 'high' },
+              { name: 'Extra high', value: 'xhigh' },
+              { name: 'Max: hardest problems', value: 'max' },
+              { name: "Default: use the bundle's setting", value: 'default' },
+            ),
+        ),
+    )
+    .addSubcommand((s) => s.setName('stop').setDescription(`Stop ${bot}'s current work in this thread or channel`))
+    .addSubcommand((s) => s.setName('reset').setDescription('Start a fresh session in this thread or DM (forgets the conversation)'))
+    .addSubcommandGroup((g) =>
+      g
+        .setName('memory')
+        .setDescription(`Standing instructions ${bot} follows here`)
+        .addSubcommand((s) => s.setName('list').setDescription('Show channel and server memory'))
+        .addSubcommand((s) =>
+          s
+            .setName('add')
+            .setDescription('Add a standing instruction')
+            .addStringOption((o) => o.setName('text').setDescription('The instruction').setRequired(true).setMaxLength(500))
+            .addStringOption((o) =>
+              o
+                .setName('scope')
+                .setDescription('Channel (default) or whole server (admin)')
+                .addChoices({ name: 'This channel', value: 'channel' }, { name: 'Whole server', value: 'guild' }),
+            ),
+        )
+        .addSubcommand((s) =>
+          s
+            .setName('forget')
+            .setDescription('Delete one memory by id')
+            .addIntegerOption((o) => o.setName('id').setDescription('Memory id').setRequired(true)),
+        )
+        .addSubcommand((s) =>
+          s
+            .setName('clear')
+            .setDescription('Admin: delete all memory for this channel or server')
+            .addStringOption((o) =>
+              o
+                .setName('scope')
+                .setDescription('What to clear')
+                .setRequired(true)
+                .addChoices({ name: 'This channel', value: 'channel' }, { name: 'Whole server', value: 'guild' }),
+            ),
+        ),
+    )
+    .addSubcommandGroup((g) =>
+      g
+        .setName('schedule')
+        .setDescription('Standing work that runs on a schedule')
+        .addSubcommand((s) => s.setName('list').setDescription('List schedules in this channel'))
+        .addSubcommand((s) =>
+          s
+            .setName('add')
+            .setDescription(`Add a scheduled task (or just ask ${bot} in plain words)`)
+            .addStringOption((o) => o.setName('cron').setDescription('Cron, e.g. "0 9 * * 1-5"').setRequired(true))
+            .addStringOption((o) => o.setName('prompt').setDescription('Standalone instruction for each run').setRequired(true).setMaxLength(4000))
+            .addStringOption((o) => o.setName('description').setDescription('Short label').setMaxLength(200))
+            .addStringOption((o) => o.setName('timezone').setDescription('IANA timezone, e.g. Asia/Tokyo')),
+        )
+        .addSubcommand((s) =>
+          s
+            .setName('cancel')
+            .setDescription('Cancel a schedule')
+            .addIntegerOption((o) => o.setName('id').setDescription('Schedule id').setRequired(true)),
+        )
+        .addSubcommand((s) =>
+          s
+            .setName('run')
+            .setDescription('Run a schedule now')
+            .addIntegerOption((o) => o.setName('id').setDescription('Schedule id').setRequired(true)),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('auth')
+        .setDescription('Admin: switch between API key and Claude plan sign-in')
+        .addStringOption((o) =>
+          o
+            .setName('mode')
+            .setDescription('Credential to use')
+            .setRequired(true)
+            .addChoices(
+              { name: 'API key (pay-as-you-go / plan monthly API credits)', value: 'api_key' },
+              { name: 'Claude plan sign-in (plan usage limits)', value: 'oauth_token' },
+              { name: 'Default from environment', value: 'default' },
+            ),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('usage')
+        .setDescription('Admin: runs and estimated cost')
+        .addIntegerOption((o) => o.setName('days').setDescription('Look-back window (default 30)').setMinValue(1).setMaxValue(365)),
+    )
+    .addSubcommand((s) => s.setName('bundles').setDescription('Admin: list access bundles'));
+}
 
-export async function registerCommands(cfg: Config): Promise<void> {
+export async function registerCommands(cfg: Config, bot: string): Promise<void> {
   const rest = new REST({ version: '10' }).setToken(cfg.DISCORD_TOKEN);
-  const body = [command.toJSON(), askMenuCommand.toJSON(), translateMenuCommand.toJSON()];
+  const body = [buildCommand(bot).toJSON(), askMenuCommand(bot).toJSON(), translateMenuCommand.toJSON()];
   if (cfg.DEV_GUILD_ID) {
     await rest.put(Routes.applicationGuildCommands(cfg.DISCORD_APP_ID, cfg.DEV_GUILD_ID), { body });
     log.info('registered guild commands', { guild: cfg.DEV_GUILD_ID });
@@ -242,11 +246,15 @@ export class CommandHandler {
     this.ask = new AskHandler(d);
   }
 
+  private get bot(): string {
+    return botName(this.d.client);
+  }
+
   async onInteraction(i: Interaction): Promise<void> {
     try {
       if (i.isAutocomplete()) return await this.autocomplete(i);
       if (i.isButton() && i.customId.startsWith(STOP_PREFIX)) return await this.stopButton(i);
-      if (i.isMessageContextMenuCommand() && (i.commandName === ASK_MENU || i.commandName === TRANSLATE_MENU)) return await this.ask.menu(i);
+      if (i.isMessageContextMenuCommand() && (i.commandName === askMenuName(this.bot) || i.commandName === TRANSLATE_MENU)) return await this.ask.menu(i);
       if (i.isModalSubmit() && this.ask.isModal(i.customId)) return await this.ask.modal(i);
       if (i.isChatInputCommand() && i.commandName === 'claude') return await this.command(i);
     } catch (e) {
@@ -266,7 +274,7 @@ export class CommandHandler {
   private async stopButton(i: ButtonInteraction) {
     const key = i.customId.slice(STOP_PREFIX.length);
     if (!this.canWorkHere(i, this.configChannelId(i))) {
-      await i.reply({ content: "You don't have access to Claude's work in this channel.", ...EPHEMERAL });
+      await i.reply({ content: `You don't have access to ${this.bot}'s work in this channel.`, ...EPHEMERAL });
       return;
     }
     const ok = this.d.runs.stop(key);
@@ -322,7 +330,7 @@ export class CommandHandler {
           return;
         }
         if (!inForumPost && i.channel && i.channel.type !== ChannelType.GuildText && i.channel.type !== ChannelType.GuildAnnouncement) {
-          await i.reply({ content: 'Claude works in text, announcement and forum channels.', ...EPHEMERAL });
+          await i.reply({ content: `${this.bot} works in text, announcement and forum channels.`, ...EPHEMERAL });
           return;
         }
         const name = i.options.getString('bundle', true);
@@ -334,7 +342,7 @@ export class CommandHandler {
         store.enableChannel(channelId, i.guild!.id, name, i.user.id);
         // Settings commands confirm privately, so configuring Claude doesn't announce itself in the channel.
         await i.reply({
-          content: `✅ Claude is enabled here with the **${name}** bundle (${bundle.capabilities.join(', ')}${
+          content: `✅ ${this.bot} is enabled here with the **${name}** bundle (${bundle.capabilities.join(', ')}${
             Object.keys(bundle.mcpServers).length ? `, ${Object.keys(bundle.mcpServers).join(', ')}` : ''
           }). Tag <@${this.d.client.user!.id}> with a task to get started.`,
           ...EPHEMERAL,
@@ -344,7 +352,7 @@ export class CommandHandler {
       case 'disable': {
         if (!(await needGuild()) || !(await needAdmin())) return;
         const ok = store.disableChannel(channelId);
-        await i.reply({ content: ok ? '👋 Claude is removed from this channel. Schedules here will stop running.' : 'Claude was not enabled here.', ...EPHEMERAL });
+        await i.reply({ content: ok ? `👋 ${this.bot} is removed from this channel. Schedules here will stop running.` : `${this.bot} was not enabled here.`, ...EPHEMERAL });
         return;
       }
       case 'status':
@@ -355,14 +363,14 @@ export class CommandHandler {
         if (mode === 'ambient' && !(await needAdmin())) return;
         const ok = store.setReplyMode(channelId, mode, i.user.id);
         if (!ok) {
-          await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
+          await i.reply({ content: `${this.bot} is not enabled in this channel.`, ...EPHEMERAL });
           return;
         }
         await i.reply({
           content:
             mode === 'ambient'
-              ? `🔔 Ambient mode on: Claude may jump in when it can clearly help (max ${bundles.ambient.maxPerHour}/hour).`
-              : '🔕 Claude will only reply when mentioned or in its own threads.',
+              ? `🔔 Ambient mode on: ${this.bot} may jump in when it can clearly help (max ${bundles.ambient.maxPerHour}/hour).`
+              : `🔕 ${this.bot} will only reply when mentioned or in its own threads.`,
           ...EPHEMERAL,
         });
         return;
@@ -371,13 +379,13 @@ export class CommandHandler {
         if (!(await needGuild()) || !(await needAdmin())) return;
         const on = i.options.getString('mode', true) === 'on';
         if (!store.setThreads(channelId, on, i.user.id)) {
-          await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
+          await i.reply({ content: `${this.bot} is not enabled in this channel.`, ...EPHEMERAL });
           return;
         }
         await i.reply({
           content: on
-            ? '🧵 Claude will open a thread for each task here.'
-            : '💬 Claude will reply in the channel. Reply to one of its messages to continue, or start a thread yourself and tag it there.',
+            ? `🧵 ${this.bot} will open a thread for each task here.`
+            : `💬 ${this.bot} will reply in the channel. Reply to one of its messages to continue, or start a thread yourself and tag it there.`,
           ...EPHEMERAL,
         });
         return;
@@ -387,13 +395,13 @@ export class CommandHandler {
         const name = i.options.getString('name', true);
         const model = name === 'default' ? null : name;
         if (!store.setModel(channelId, model, i.user.id)) {
-          await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
+          await i.reply({ content: `${this.bot} is not enabled in this channel.`, ...EPHEMERAL });
           return;
         }
         const bundleModel = bundles.get(store.getChannel(channelId)!.bundle)?.model ?? cfg.CLAUDE_MODEL;
         await i.reply({
           content: model
-            ? `🤖 Claude now uses **${model}** in this channel. Applies to new work.`
+            ? `🤖 ${this.bot} now uses **${model}** in this channel. Applies to new work.`
             : `🤖 This channel now uses the bundle's model: **${bundleModel}**.`,
           ...EPHEMERAL,
         });
@@ -404,7 +412,7 @@ export class CommandHandler {
         const level = i.options.getString('level', true);
         const effort = level === 'default' ? null : (level as Effort);
         if (!store.setEffort(channelId, effort, i.user.id)) {
-          await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
+          await i.reply({ content: `${this.bot} is not enabled in this channel.`, ...EPHEMERAL });
           return;
         }
         const row = store.getChannel(channelId)!;
@@ -422,7 +430,7 @@ export class CommandHandler {
       }
       case 'stop': {
         if (!this.canWorkHere(i, channelId)) {
-          await i.reply({ content: "You don't have access to Claude's work in this channel.", ...EPHEMERAL });
+          await i.reply({ content: `You don't have access to ${this.bot}'s work in this channel.`, ...EPHEMERAL });
           return;
         }
         // In a channel, inline conversations have no thread of their own: stop everything running here.
@@ -435,11 +443,11 @@ export class CommandHandler {
       }
       case 'reset': {
         if (!this.canWorkHere(i, channelId)) {
-          await i.reply({ content: "You don't have access to Claude's work in this channel.", ...EPHEMERAL });
+          await i.reply({ content: `You don't have access to ${this.bot}'s work in this channel.`, ...EPHEMERAL });
           return;
         }
         if (this.d.runs.isBusy(i.channelId)) {
-          await i.reply({ content: 'Claude is working here; stop it first.', ...EPHEMERAL });
+          await i.reply({ content: `${this.bot} is working here; stop it first.`, ...EPHEMERAL });
           return;
         }
         const ok = store.clearThreadSession(i.channelId);
@@ -458,7 +466,7 @@ export class CommandHandler {
         }
         log.info('auth mode changed', { by: i.user.id, mode: auth.mode() });
         await i.reply({
-          content: `🔑 Claude now uses: **${AUTH_LABEL[auth.mode()]}**. Applies to new work; anything running finishes on the old credential.`,
+          content: `🔑 ${this.bot} now uses: **${AUTH_LABEL[auth.mode()]}**. Applies to new work; anything running finishes on the old credential.`,
           ...EPHEMERAL,
         });
         return;
@@ -497,7 +505,7 @@ export class CommandHandler {
     if (i.guild) {
       const ch = store.getChannel(channelId);
       if (!ch) {
-        await i.reply({ content: 'Claude is not enabled in this channel. An admin can run `/claude enable`.', ...EPHEMERAL });
+        await i.reply({ content: `${this.bot} is not enabled in this channel. An admin can run \`/claude enable\`.`, ...EPHEMERAL });
         return;
       }
       bundleName = ch.bundle;
@@ -581,11 +589,11 @@ export class CommandHandler {
       return;
     }
     if (!store.getChannel(channelId)) {
-      await i.reply({ content: 'Claude is not enabled in this channel.', ...EPHEMERAL });
+      await i.reply({ content: `${this.bot} is not enabled in this channel.`, ...EPHEMERAL });
       return;
     }
     const denied = async () => {
-      await i.reply({ content: "You don't have a role that can hand Claude work in this channel.", ...EPHEMERAL });
+      await i.reply({ content: `You don't have a role that can hand ${this.bot} work in this channel.`, ...EPHEMERAL });
     };
     switch (sub) {
       case 'list': {
@@ -596,7 +604,7 @@ export class CommandHandler {
             return `#${r.id} **${r.description || truncate(r.prompt, 60)}** · \`${r.cron}\` ${r.tz}${next ? ` · next <t:${Math.floor(next.getTime() / 1000)}:R>` : ''}`;
           })
           .join('\n');
-        await i.reply({ content: text || 'No schedules here. Ask Claude something like "every weekday at 9am, summarise yesterday\'s messages".', ...EPHEMERAL });
+        await i.reply({ content: text || `No schedules here. Ask ${this.bot} something like "every weekday at 9am, summarise yesterday's messages".`, ...EPHEMERAL });
         return;
       }
       case 'add': {

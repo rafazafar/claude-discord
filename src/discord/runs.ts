@@ -19,6 +19,7 @@ import { describeTool, formatDuration, splitMessage, tablesToCodeBlocks, truncat
 import { log, errMsg } from '../log.js';
 import { ensureAgentDir, giveToAgent } from '../sandbox.js';
 import { effectiveEffort, shortModel } from '../flags.js';
+import { DEFAULT_BOT_NAME } from '../botname.js';
 import type { Effort } from '../bundles.js';
 
 export type Trigger = 'mention' | 'thread' | 'dm' | 'ambient' | 'schedule' | 'private';
@@ -93,6 +94,8 @@ export interface RunManagerDeps {
   auth: AuthManager;
   cfg: Config;
   onSchedulesChanged: () => void;
+  /** The bot's Discord name, so Claude introduces itself the way people tag it. */
+  botName?: () => string;
 }
 
 /** Live progress message with a Stop button, edited at most every ~2s. */
@@ -418,6 +421,7 @@ export class RunManager {
             channelName: first.configChannelName,
             isDM: !first.guildId,
             bundleName: first.bundleName,
+            botName: this.deps.botName?.() ?? DEFAULT_BOT_NAME,
           },
           abort,
           toolCtx: {

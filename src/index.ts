@@ -9,6 +9,7 @@ import { MessageHandler } from './discord/handler.js';
 import { CommandHandler, registerCommands } from './discord/commands.js';
 import { Scheduler } from './scheduler.js';
 import { log, errMsg } from './log.js';
+import { botName } from './botname.js';
 import { agentIds, ensureAgentDir, ensurePrivateDir } from './sandbox.js';
 
 async function main() {
@@ -41,7 +42,7 @@ async function main() {
 
   let runs: RunManager;
   const scheduler = new Scheduler(client, store, cfg, () => runs);
-  runs = new RunManager({ store, bundles, auth, cfg, onSchedulesChanged: () => scheduler.reload() });
+  runs = new RunManager({ store, bundles, auth, cfg, onSchedulesChanged: () => scheduler.reload(), botName: () => botName(client) });
   const messages = new MessageHandler({ client, store, bundles, auth, cfg, runs });
   const commands = new CommandHandler({ client, store, bundles, auth, cfg, runs, scheduler });
 
@@ -49,7 +50,7 @@ async function main() {
     log.info('connected to Discord', { user: c.user.tag, guilds: c.guilds.cache.size, credential: AUTH_LABEL[auth.mode()] });
     c.user.setActivity('tag @' + c.user.username + ' with a task', { type: ActivityType.Custom });
     try {
-      await registerCommands(cfg);
+      await registerCommands(cfg, botName(c));
     } catch (e) {
       log.error('failed to register slash commands', { error: errMsg(e) });
     }

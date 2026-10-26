@@ -17,7 +17,7 @@
       "github": {
         "tokenEnv": "GITHUB_TOKEN",
         "repos": [],
-        "gitName": "Claude (Discord)",
+        "gitName": "zClaude (Discord)",
         "gitEmail": "claude-bot@users.noreply.github.com"
       },
       "mcpServers": {},

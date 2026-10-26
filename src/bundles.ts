@@ -35,7 +35,7 @@ const GithubSchema = z.object({
   tokenEnv: z.string().default('GITHUB_TOKEN'),
   /** owner/repo entries Claude is told it may work on. Enforce with the token's scope. */
   repos: z.array(z.string()).default([]),
-  gitName: z.string().default('Claude (Discord)'),
+  gitName: z.string().default('zClaude (Discord)'),
   gitEmail: z.string().default('claude-bot@users.noreply.github.com'),
 });
 

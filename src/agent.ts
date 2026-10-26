@@ -1,5 +1,6 @@
 import { query, type Options, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Bundle, BundleRegistry, Effort } from './bundles.js';
+import { DEFAULT_BOT_NAME } from './botname.js';
 import type { AuthManager } from './auth.js';
 import { buildDiscordTools, DISCORD_TOOL_NAMES, type ToolContext } from './tools.js';
 import { log, errMsg } from './log.js';
@@ -10,6 +11,8 @@ export interface RunContext {
   channelName: string;
   isDM: boolean;
   bundleName: string;
+  /** What people call the bot in Discord (e.g. zClaude). */
+  botName?: string;
 }
 
 export interface RunInput {
@@ -95,6 +98,7 @@ export function builtinTools(bundle: Bundle): string[] {
 
 /** Static per-session instructions. Dynamic facts (memory, requester, time) go in each prompt. */
 export function systemAppend(bundle: Bundle, ctx: RunContext): string {
+  const bot = ctx.botName ?? DEFAULT_BOT_NAME;
   const where = ctx.isDM ? 'a direct message' : `#${ctx.channelName} in the "${ctx.guildName}" Discord server`;
   const caps: string[] = [];
   if (bundle.capabilities.includes('web')) caps.push('search and read the web');
@@ -104,7 +108,7 @@ export function systemAppend(bundle: Bundle, ctx: RunContext): string {
 
   const lines = [
     '# Working in Discord',
-    `You are Claude, working as a teammate in ${where}. People tag @Claude to hand you work, and you reply in a thread or as a reply in the channel.`,
+    `In this Discord you are ${bot}, an AI teammate in ${where}, built on Anthropic's Claude. Introduce and refer to yourself as ${bot}. People tag @${bot} to hand you work, and you reply in a thread or as a reply in the channel.`,
     `Access bundle: "${ctx.bundleName}". You can: ${caps.length ? caps.join('; ') : 'answer from your own knowledge'}.`,
     'You also have Discord tools: channel memory (remember/list_memories/forget), reply mode and quiet_thread, scheduled standing work, send_file, and read_channel_history.',
     '',
@@ -187,10 +191,10 @@ export function buildOptions(deps: AgentDeps, input: RunInput, resume: string | 
 const FRIENDLY_ERRORS: Record<string, string> = {
   billing_error:
     'The Claude account is out of credits. If you use plan monthly credits, they refresh next billing cycle; otherwise add credits or enable auto-reload in the Claude Console.',
-  authentication_failed: "Claude rejected the bot's credential. An admin should check the API key or plan token.",
+  authentication_failed: "Anthropic rejected the bot's credential. An admin should check the API key or plan token.",
   oauth_org_not_allowed: 'This Claude plan sign-in is not allowed for this use. Switch to an API key with /claude auth.',
   rate_limit: 'Hit a Claude rate or usage limit. Try again in a bit.',
-  overloaded: 'Claude is overloaded right now. Try again shortly.',
+  overloaded: "Anthropic's API is overloaded right now. Try again shortly.",
   model_not_found: "The configured model was not found. Check CLAUDE_MODEL or the bundle's model.",
 };
 
@@ -247,7 +251,7 @@ async function runOnce(deps: AgentDeps, input: RunInput, resume: string | null):
           if (msg.subtype === 'success') {
             result.status = msg.is_error ? 'error' : 'success';
             result.text = msg.result || lastAssistantText;
-            if (msg.is_error) result.error = (apiError && FRIENDLY_ERRORS[apiError]) || msg.result || 'Claude returned an error.';
+            if (msg.is_error) result.error = (apiError && FRIENDLY_ERRORS[apiError]) || msg.result || 'The model returned an error.';
           } else if (msg.subtype === 'error_max_turns') {
             result.status = 'max_turns';
             result.text = lastAssistantText;
